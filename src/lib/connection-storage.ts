@@ -3,6 +3,19 @@
  * Handles saving, loading, and managing SSH connections with hierarchical organization
  */
 
+import {
+  deleteConnectionSecrets,
+  KEYCHAIN_MIGRATION_FLAG,
+  loadConnectionSecrets,
+  storeConnectionSecrets,
+  updateConnectionSecrets,
+  type ConnectionSecrets,
+  type ConnectionSecretUpdate,
+  copyConnectionSecrets,
+} from './credential-storage';
+
+export type { ConnectionSecretUpdate } from './credential-storage';
+
 export interface ConnectionData {
   id: string;
   name: string;
@@ -20,11 +33,41 @@ export interface ConnectionData {
   description?: string;
   // Authentication details
   authMethod?: 'password' | 'publickey' | 'keyboard-interactive' | 'anonymous';
-  password?: string; // Note: In production, this should be encrypted
+  /** Transient only — never persisted to localStorage; use Keychain on macOS */
+  password?: string;
   privateKeyPath?: string;
+  /** Transient only — never persisted to localStorage; use Keychain on macOS */
   passphrase?: string;
+  hasStoredPassword?: boolean;
+  hasStoredPassphrase?: boolean;
   // FTP-specific
   ftpsEnabled?: boolean;
+}
+
+function sanitizeConnectionForStorage(connection: ConnectionData): ConnectionData {
+  const {
+    password: _password,
+    passphrase: _passphrase,
+    ...persisted
+  } = connection;
+
+  return persisted;
+}
+
+function sanitizeConnectionsForStorage(connections: ConnectionData[]): ConnectionData[] {
+  return connections.map(sanitizeConnectionForStorage);
+}
+
+export function connectionHasStoredCredentials(connection: ConnectionData): boolean {
+  if (connection.authMethod === 'anonymous') {
+    return true;
+  }
+
+  if (connection.authMethod === 'password') {
+    return !!(connection.password || connection.hasStoredPassword);
+  }
+
+  return !!connection.privateKeyPath;
 }
 
 export interface ConnectionFolder {
@@ -43,6 +86,13 @@ const LEGACY_SESSIONS_STORAGE_KEY = 'skd-sessions';
 const LEGACY_FOLDERS_STORAGE_KEY = 'skd-session-folders';
 
 export class ConnectionStorageManager {
+  private static persistConnections(connections: ConnectionData[]): void {
+    localStorage.setItem(
+      CONNECTIONS_STORAGE_KEY,
+      JSON.stringify(sanitizeConnectionsForStorage(connections)),
+    );
+  }
+
   /**
    * Migrate data from old session storage to new connection storage
    */
@@ -64,7 +114,7 @@ export class ConnectionStorageManager {
             ...session,
             folder: session.folder?.replace(/All Sessions/g, 'All Connections')
           }));
-          localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(connections));
+          this.persistConnections(connections);
           console.log(`[Migration] Migrated ${connections.length} sessions to connections`);
         }
         
@@ -164,7 +214,7 @@ export class ConnectionStorageManager {
     };
 
     connections.push(newConnection);
-    localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(connections));
+    this.persistConnections(connections);
 
     return newConnection;
   }
@@ -195,7 +245,7 @@ export class ConnectionStorageManager {
       connections.push(newConnection);
     }
 
-    localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(connections));
+    this.persistConnections(connections);
 
     return newConnection;
   }
@@ -214,7 +264,7 @@ export class ConnectionStorageManager {
       ...updates,
     };
 
-    localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(connections));
+    this.persistConnections(connections);
     return connections[index];
   }
 
@@ -236,7 +286,7 @@ export class ConnectionStorageManager {
 
     if (filtered.length === connections.length) return false;
 
-    localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(filtered));
+    this.persistConnections(filtered);
     return true;
   }
 
@@ -314,7 +364,7 @@ export class ConnectionStorageManager {
     if (filteredFolders.length === folders.length) return false;
 
     localStorage.setItem(FOLDERS_STORAGE_KEY, JSON.stringify(filteredFolders));
-    localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(filteredConnections));
+    this.persistConnections(filteredConnections);
 
     return true;
   }
@@ -427,9 +477,9 @@ export class ConnectionStorageManager {
    * Export connections as JSON
    */
   static exportConnections(): string {
-    const connections = this.getConnections();
+    const connections = sanitizeConnectionsForStorage(this.getConnections());
     const folders = this.getFolders();
-    return JSON.stringify({ connections, folders }, null, 2);
+    return JSON.stringify({ connections, folders, secretsExcluded: true }, null, 2);
   }
 
   /**
@@ -471,7 +521,7 @@ export class ConnectionStorageManager {
         });
       });
 
-      localStorage.setItem(CONNECTIONS_STORAGE_KEY, JSON.stringify(connections));
+      this.persistConnections(connections);
       localStorage.setItem(FOLDERS_STORAGE_KEY, JSON.stringify(folders));
 
       return imported.connections.length;
@@ -489,6 +539,114 @@ export class ConnectionStorageManager {
     localStorage.removeItem(FOLDERS_STORAGE_KEY);
     this.initialize();
   }
+
+  static replaceAllConnections(connections: ConnectionData[]): void {
+    this.persistConnections(connections);
+  }
+}
+
+
+
+export async function getConnectionWithCredentials(id: string): Promise<ConnectionData | undefined> {
+  const connection = ConnectionStorageManager.getConnection(id);
+  if (!connection) return undefined;
+
+  const secrets = await loadConnectionSecrets(id, {
+    hasStoredPassword: connection.hasStoredPassword,
+    hasStoredPassphrase: connection.hasStoredPassphrase,
+  });
+
+  return {
+    ...connection,
+    password: secrets.password,
+    passphrase: secrets.passphrase,
+  };
+}
+
+export async function saveConnectionWithCredentials(
+  id: string,
+  connection: Omit<ConnectionData, 'id' | 'createdAt'>,
+  secrets?: ConnectionSecrets,
+  options?: { rememberPassword?: boolean },
+): Promise<ConnectionData> {
+  const credentialFlags = await storeConnectionSecrets(id, secrets ?? {}, options);
+
+  return ConnectionStorageManager.saveConnectionWithId(id, {
+    ...connection,
+    hasStoredPassword: credentialFlags.hasStoredPassword,
+    hasStoredPassphrase: credentialFlags.hasStoredPassphrase,
+  });
+}
+
+export async function updateConnectionWithCredentials(
+  id: string,
+  updates: Partial<Omit<ConnectionData, 'id' | 'createdAt'>>,
+  secrets?: ConnectionSecretUpdate,
+  options?: { rememberPassword?: boolean },
+): Promise<ConnectionData | null> {
+  const existing = ConnectionStorageManager.getConnection(id);
+  if (!existing) return null;
+
+  const credentialFlags = await updateConnectionSecrets(id, secrets ?? {}, existing, options);
+
+  return ConnectionStorageManager.updateConnection(id, {
+    ...updates,
+    hasStoredPassword: credentialFlags.hasStoredPassword,
+    hasStoredPassphrase: credentialFlags.hasStoredPassphrase,
+  });
+}
+
+export async function deleteConnectionWithCredentials(id: string): Promise<boolean> {
+  await deleteConnectionSecrets(id);
+  return ConnectionStorageManager.deleteConnection(id);
+}
+
+export async function duplicateConnectionWithCredentials(
+  sourceId: string,
+  connection: Omit<ConnectionData, 'id' | 'createdAt'>,
+): Promise<ConnectionData | null> {
+  const saved = ConnectionStorageManager.saveConnection(connection);
+  const credentialFlags = await copyConnectionSecrets(sourceId, saved.id);
+
+  return ConnectionStorageManager.updateConnection(saved.id, credentialFlags);
+}
+
+export async function migratePlaintextCredentialsToKeychain(): Promise<number> {
+  if (localStorage.getItem(KEYCHAIN_MIGRATION_FLAG)) {
+    return 0;
+  }
+
+  const connections = ConnectionStorageManager.getConnections();
+  let migratedCount = 0;
+
+  const updatedConnections = await Promise.all(
+    connections.map(async (connection) => {
+      const legacyPassword = connection.password;
+      const legacyPassphrase = connection.passphrase;
+
+      if (!legacyPassword && !legacyPassphrase) {
+        return sanitizeConnectionForStorage(connection);
+      }
+
+      const flags = await storeConnectionSecrets(
+        connection.id,
+        { password: legacyPassword, passphrase: legacyPassphrase },
+        { force: true },
+      );
+
+      migratedCount += 1;
+      return sanitizeConnectionForStorage({
+        ...connection,
+        hasStoredPassword: flags.hasStoredPassword || !!legacyPassword,
+        hasStoredPassphrase: flags.hasStoredPassphrase || !!legacyPassphrase,
+      });
+    }),
+  );
+
+  ConnectionStorageManager.replaceAllConnections(updatedConnections);
+  localStorage.setItem(KEYCHAIN_MIGRATION_FLAG, '1');
+
+  return migratedCount;
 }
 
 /**

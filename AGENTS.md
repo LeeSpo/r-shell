@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-**skd** is a lightweight SSH/SFTP terminal workspace built with **React 19 + TypeScript** (frontend) and **Tauri 2 + Rust** (backend). It focuses on interactive SSH and local shell sessions, SFTP file management, host profiles, proxy-based connections, and multi-tab terminal layout in a VS Code-like workspace.
+**skd** is a **macOS-only** lightweight SSH/SFTP terminal workspace built with **React 19 + TypeScript** (frontend) and **Tauri 2 + Rust** (backend). It focuses on interactive SSH and local shell sessions, SFTP file management, host profiles, proxy-based connections, and multi-tab terminal layout in a VS Code-like workspace. Remote SSH targets may run any OS; the desktop app itself targets macOS only.
 
 This project is a fork of [R-Shell](https://github.com/GOODBOY008/r-shell) (MIT License). The current codebase has been simplified and rebranded; see [NOTICE](NOTICE) and [README](README) for attribution.
 
@@ -59,6 +59,8 @@ The WebSocket protocol uses a tagged `WsMessage` enum:
 
 ## Build & Run
 
+**Platform**: macOS only. `pnpm tauri build` produces `.app` + `.dmg` bundles. Use `pnpm tauri dev` for development; `pnpm dev` (browser-only) lacks the native menu bar and Keychain bridge.
+
 ```bash
 # Install dependencies
 pnpm install
@@ -69,7 +71,7 @@ pnpm dev
 # Full desktop app with hot reload
 pnpm tauri dev
 
-# Production build
+# Production build (macOS .app + .dmg)
 pnpm build && pnpm tauri build
 ```
 

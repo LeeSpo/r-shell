@@ -79,7 +79,6 @@ export function SettingsModal({ open, onOpenChange, onAppearanceChange, onCheckF
     
     // Security settings
     hostKeyVerification: true,
-    savePasswords: false,
     autoLockTimeout: 30,
     
     // Interface settings
@@ -90,10 +89,10 @@ export function SettingsModal({ open, onOpenChange, onAppearanceChange, onCheckF
     enableNotifications: true,
     
     // Keyboard shortcuts
-    newSession: DEFAULT_APP_KEYBOARD_SHORTCUTS.newSession,
-    closeSession: DEFAULT_APP_KEYBOARD_SHORTCUTS.closeSession,
-    nextTab: DEFAULT_APP_KEYBOARD_SHORTCUTS.nextTab,
-    previousTab: DEFAULT_APP_KEYBOARD_SHORTCUTS.previousTab,
+    newSession: DEFAULT_APP_KEYBOARD_SHORTCUTS.newSession as string,
+    closeSession: DEFAULT_APP_KEYBOARD_SHORTCUTS.closeSession as string,
+    nextTab: DEFAULT_APP_KEYBOARD_SHORTCUTS.nextTab as string,
+    previousTab: DEFAULT_APP_KEYBOARD_SHORTCUTS.previousTab as string,
     
     // Advanced settings
     logLevel: 'info',
@@ -180,17 +179,16 @@ export function SettingsModal({ open, onOpenChange, onAppearanceChange, onCheckF
         keepAliveInterval: 60,
         autoReconnect: true,
         hostKeyVerification: true,
-        savePasswords: false,
         autoLockTimeout: 30,
         theme: 'dark',
         showConnectionManager: true,
         showSystemMonitor: true,
         showStatusBar: true,
         enableNotifications: true,
-        newSession: DEFAULT_APP_KEYBOARD_SHORTCUTS.newSession,
-        closeSession: DEFAULT_APP_KEYBOARD_SHORTCUTS.closeSession,
-        nextTab: DEFAULT_APP_KEYBOARD_SHORTCUTS.nextTab,
-        previousTab: DEFAULT_APP_KEYBOARD_SHORTCUTS.previousTab,
+        newSession: DEFAULT_APP_KEYBOARD_SHORTCUTS.newSession as string,
+        closeSession: DEFAULT_APP_KEYBOARD_SHORTCUTS.closeSession as string,
+        nextTab: DEFAULT_APP_KEYBOARD_SHORTCUTS.nextTab as string,
+        previousTab: DEFAULT_APP_KEYBOARD_SHORTCUTS.previousTab as string,
         logLevel: 'info',
         maxLogSize: 100,
         checkUpdates: false
@@ -891,20 +889,7 @@ export function SettingsModal({ open, onOpenChange, onAppearanceChange, onCheckF
                   />
                 </div>
 
-                <Separator />
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>{t('settings.security.savePasswords')}</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {t('settings.security.savePasswordsDesc')}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={settings.savePasswords}
-                    onCheckedChange={(checked) => updateSetting('savePasswords', checked)}
-                  />
-                </div>
 
                 <div className="space-y-2">
                   <Label>{t('settings.security.autoLockTimeout', { timeout: settings.autoLockTimeout })}</Label>

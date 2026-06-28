@@ -224,11 +224,7 @@ mod key_loading_tests {
     #[test]
     fn test_decode_secret_key_rejects_file_path_string() {
         // A file path is not valid PEM content — decode must fail.
-        let fake_path = if cfg!(windows) {
-            r"C:\Users\leeec\.ssh\id_rsa"
-        } else {
-            "/home/user/.ssh/id_rsa"
-        };
+        let fake_path = "/home/user/.ssh/id_rsa";
         let result = decode_secret_key(fake_path, None);
         assert!(
             result.is_err(),
@@ -304,27 +300,15 @@ mod key_loading_tests {
         );
     }
 
-    // ── 7. Tilde expansion: ~\ (Windows) and ~/ (Unix) both expand ───────────
+    // ── 7. Tilde expansion ───────────────────────────────────────────────────
 
     #[test]
     fn test_tilde_expansion_unix_style() {
-        // ~/some/path — the tilde portion must be replaced with the home dir.
         let path = "~/.ssh/id_rsa".to_string();
         let expanded = expand_tilde(&path);
         assert!(
             !expanded.starts_with('~'),
             "Unix-style tilde should be expanded, got: {expanded}"
-        );
-    }
-
-    #[test]
-    fn test_tilde_expansion_windows_style() {
-        // ~\some\path — Windows convention.
-        let path = r"~\.ssh\id_rsa".to_string();
-        let expanded = expand_tilde(&path);
-        assert!(
-            !expanded.starts_with('~'),
-            "Windows-style tilde should be expanded, got: {expanded}"
         );
     }
 

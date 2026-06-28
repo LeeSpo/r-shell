@@ -32,7 +32,7 @@ async function syncNativeMenu(): Promise<void> {
     }
     await invoke('update_menu_language', { translations });
   } catch (e) {
-    // Expected on non-macOS or when the Tauri bridge is unavailable
+    // Expected when the Tauri bridge is unavailable (e.g. browser-only preview)
     console.warn('[i18n] Native menu sync skipped:', e);
   }
 }

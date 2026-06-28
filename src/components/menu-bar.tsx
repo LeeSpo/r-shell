@@ -1,36 +1,18 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuLabel
+  DropdownMenuLabel,
 } from './ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { ConnectionStorageManager, type ConnectionData } from '@/lib/connection-storage';
-import { 
-  Plus, 
-  FolderOpen, 
-  Save, 
-  X, 
-  Copy, 
-  Clipboard, 
-  Search, 
-  Settings, 
-  RefreshCw,
-  Download,
-  Scissors,
-  ArrowRight,
-  ArrowLeft,
+import {
+  Settings,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -39,34 +21,10 @@ import {
   PanelBottomOpen,
   Maximize2,
   LayoutGrid,
-  Terminal,
 } from 'lucide-react';
 
 interface MenuBarProps {
-  onNewConnection?: () => void;
-  onNewLocalTerminal?: () => void;
-  onOpenConnection?: () => void;
-  onSaveConnection?: () => void;
-  onCloseConnection?: () => void;
-  onCopy?: () => void;
-  onPaste?: () => void;
-  onSelectAll?: () => void;
-  onFind?: () => void;
-  onToggleConnectionManager?: () => void;
-  onToggleSystemMonitor?: () => void;
-  onToggleFullscreen?: () => void;
   onOpenSettings?: () => void;
-  onOpenSFTP?: () => void;
-  onCheckForUpdates?: () => void;
-  onNewTab?: () => void;
-  onCloneTab?: () => void;
-  onNextTab?: () => void;
-  onPreviousTab?: () => void;
-  closeConnectionShortcutLabel?: string;
-  onRecentConnectionSelect?: (connection: ConnectionData) => void;
-  hasActiveConnection?: boolean;
-  canPaste?: boolean;
-  // Layout controls (VS Code-style, right-aligned)
   onToggleLeftSidebar?: () => void;
   onToggleRightSidebar?: () => void;
   onToggleBottomPanel?: () => void;
@@ -79,29 +37,7 @@ interface MenuBarProps {
 }
 
 export function MenuBar({
-  onNewConnection,
-  onNewLocalTerminal,
-  onOpenConnection,
-  onSaveConnection,
-  onCloseConnection,
-  onCopy,
-  onPaste,
-  onSelectAll,
-  onFind,
-  onToggleConnectionManager: _onToggleConnectionManager,
-  onToggleSystemMonitor: _onToggleSystemMonitor,
-  onToggleFullscreen: _onToggleFullscreen,
   onOpenSettings,
-  onOpenSFTP: _onOpenSFTP,
-  onCheckForUpdates,
-  onNewTab,
-  onCloneTab,
-  onNextTab,
-  onPreviousTab,
-  closeConnectionShortcutLabel,
-  onRecentConnectionSelect,
-  hasActiveConnection = false,
-  canPaste = true,
   onToggleLeftSidebar,
   onToggleRightSidebar,
   onToggleBottomPanel,
@@ -113,308 +49,17 @@ export function MenuBar({
   zenMode,
 }: MenuBarProps) {
   const { t } = useTranslation();
-  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-  const cmdOrCtrl = isMac ? '⌘' : 'Ctrl';
-
-  // Load recent connections
-  const [recentConnections, setRecentConnections] = useState<ConnectionData[]>([]);
-
-  useEffect(() => {
-    // Load recent connections on mount and whenever the component updates
-    const loadRecentConnections = () => {
-      const connections = ConnectionStorageManager.getRecentConnections(5); // Get top 5 recent connections
-      setRecentConnections(connections);
-    };
-
-    loadRecentConnections();
-
-    // Listen for storage changes to update recent connections
-    const handleStorageChange = () => {
-      loadRecentConnections();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  const handleDragRegionDoubleClick = useCallback(() => {
-    // On non-macOS, data-tauri-drag-region doesn't zoom on double-click, so we do it manually
-    if (!isMac) {
-      void getCurrentWindow().toggleMaximize();
-    }
-  }, [isMac]);
 
   return (
     <div
       className="border-b border-border bg-background py-1 flex items-center gap-1"
-      style={{ paddingLeft: isMac ? '80px' : '8px' }}
+      style={{ paddingLeft: '80px' }}
     >
-      {/* Menu dropdowns — hidden on macOS because native system menu bar handles these */}
-      {!isMac && (
-        <>
-      {/* File Menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">{t('menuBar.file')}</Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={onNewConnection}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t('menuBar.newConnection')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+N</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onNewLocalTerminal}>
-            <Terminal className="mr-2 h-4 w-4" />
-            {t('menuBar.newLocalTerminal')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+Shift+L</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onOpenConnection}>
-            <FolderOpen className="mr-2 h-4 w-4" />
-            {t('menuBar.openConnection')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+O</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Download className="mr-2 h-4 w-4" />
-              {t('menuBar.recentConnections')}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {recentConnections.length > 0 ? (
-                recentConnections.map(connection => (
-                  <DropdownMenuItem
-                    key={connection.id}
-                    onClick={() => onRecentConnectionSelect?.(connection)}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="font-medium">{connection.name}</span>
-                      <span className="text-xs text-muted-foreground">({connection.username}@{connection.host})</span>
-                    </span>
-                  </DropdownMenuItem>
-                ))
-              ) : (
-                <DropdownMenuItem disabled>
-                  <span className="text-muted-foreground">{t('menuBar.noRecentConnections')}</span>
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onSaveConnection} disabled={!hasActiveConnection}>
-            <Save className="mr-2 h-4 w-4" />
-            {t('menuBar.saveConnection')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+S</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasActiveConnection}>
-            <Save className="mr-2 h-4 w-4" />
-            {t('menuBar.saveConnectionAs')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+Shift+S</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onCloseConnection} disabled={!hasActiveConnection}>
-            <X className="mr-2 h-4 w-4" />
-            {t('menuBar.closeConnection')}
-            <DropdownMenuShortcut>{closeConnectionShortcutLabel ?? `${cmdOrCtrl}+Shift+W`}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem>
-            <X className="mr-2 h-4 w-4" />
-            {t('menuBar.exit')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+Q</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Edit Menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">{t('menuBar.edit')}</Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={onCopy} disabled={!hasActiveConnection}>
-            <Copy className="mr-2 h-4 w-4" />
-            {t('menuBar.copy')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+C</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onPaste} disabled={!hasActiveConnection || !canPaste}>
-            <Clipboard className="mr-2 h-4 w-4" />
-            {t('menuBar.paste')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+V</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasActiveConnection}>
-            <Scissors className="mr-2 h-4 w-4" />
-            {t('menuBar.cut')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+X</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onSelectAll} disabled={!hasActiveConnection}>
-            {t('menuBar.selectAll')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+A</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onFind} disabled={!hasActiveConnection}>
-            <Search className="mr-2 h-4 w-4" />
-            {t('menuBar.find')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+F</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasActiveConnection}>
-            <Search className="mr-2 h-4 w-4" />
-            {t('menuBar.findNext')}
-            <DropdownMenuShortcut>F3</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasActiveConnection}>
-            <Search className="mr-2 h-4 w-4" />
-            {t('menuBar.findPrevious')}
-            <DropdownMenuShortcut>Shift+F3</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={!hasActiveConnection}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            {t('menuBar.clearScreen')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+L</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* View Menu */}
-      {/* <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">View</Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={onToggleConnectionManager}>
-            <FolderTree className="mr-2 h-4 w-4" />
-            Connection Manager
-            <DropdownMenuShortcut>F9</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onToggleSystemMonitor}>
-            <Grid className="mr-2 h-4 w-4" />
-            System Monitor
-            <DropdownMenuShortcut>F10</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Eye className="mr-2 h-4 w-4" />
-              Toolbars
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem>Standard Toolbar</DropdownMenuItem>
-              <DropdownMenuItem>Connection Toolbar</DropdownMenuItem>
-              <DropdownMenuItem>Status Bar</DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onToggleFullscreen}>
-            <Maximize className="mr-2 h-4 w-4" />
-            Full Screen
-            <DropdownMenuShortcut>F11</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Settings className="mr-2 h-4 w-4" />
-              Zoom
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem>Zoom In</DropdownMenuItem>
-              <DropdownMenuItem>Zoom Out</DropdownMenuItem>
-              <DropdownMenuItem>Reset Zoom</DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        </DropdownMenuContent>
-      </DropdownMenu> */}
-
-      {/* Tools Menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">{t('menuBar.tools')}</Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          {/* <DropdownMenuItem onClick={onOpenSFTP} disabled={!hasActiveSession}>
-            <Upload className="mr-2 h-4 w-4" />
-            SFTP File Transfer
-            <DropdownMenuShortcut>F4</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasActiveSession}>
-            <TerminalIcon className="mr-2 h-4 w-4" />
-            SSH Tunnel Manager
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem>
-            <Key className="mr-2 h-4 w-4" />
-            SSH Key Manager
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={!hasActiveSession}>
-            <Download className="mr-2 h-4 w-4" />
-            Send File (ASCII)
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasActiveSession}>
-            <Upload className="mr-2 h-4 w-4" />
-            Receive File
-          </DropdownMenuItem> */}
-          {/* <DropdownMenuSeparator /> */}
-          <DropdownMenuItem onClick={onOpenSettings}>
-            <Settings className="mr-2 h-4 w-4" />
-            {t('menuBar.options')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onCheckForUpdates}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            {t('menuBar.checkForUpdates')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Connection Menu (renamed from Tab for clarity) */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">{t('menuBar.connection')}</Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem onClick={onNewTab}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t('menuBar.newTab')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+T</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onCloneTab} disabled={!hasActiveConnection}>
-            <Copy className="mr-2 h-4 w-4" />
-            {t('menuBar.duplicateTab')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+D</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onNextTab} disabled={!hasActiveConnection}>
-            <ArrowRight className="mr-2 h-4 w-4" />
-            {t('menuBar.nextTab')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+→</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onPreviousTab} disabled={!hasActiveConnection}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            {t('menuBar.previousTab')}
-            <DropdownMenuShortcut>{cmdOrCtrl}+←</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={!hasActiveConnection}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            {t('menuBar.reconnect')}
-            <DropdownMenuShortcut>F5</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!hasActiveConnection}>
-            <X className="mr-2 h-4 w-4" />
-            {t('menuBar.disconnect')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-        </> /* end !isMac menu dropdowns */
-      )}
-
-      {/* Drag region spacer — fills all empty horizontal space so the user can drag the window */}
       <div
         className="flex-1 h-full min-h-[28px] min-w-0 cursor-default"
         data-tauri-drag-region
-        onDoubleClick={handleDragRegionDoubleClick}
       />
 
-      {/* Layout controls — VS Code style, right-aligned */}
       <div className="flex items-center gap-0.5 pr-1">
         <TooltipProvider>
           <Separator orientation="vertical" className="h-4 mx-1" />

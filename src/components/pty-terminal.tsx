@@ -250,8 +250,7 @@ export function PtyTerminal({
         return true;
       }
 
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const modKey = isMac ? event.metaKey : event.ctrlKey;
+      const modKey = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       
       // Handle copy shortcut

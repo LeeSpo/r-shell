@@ -13,7 +13,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 
 import { Separator } from './ui/separator';
 import { ConnectionProfileManager, type ConnectionProfile } from '../lib/connection-profiles';
-import { ConnectionStorageManager } from '../lib/connection-storage';
+import {
+  ConnectionStorageManager,
+  saveConnectionWithCredentials,
+  updateConnectionWithCredentials,
+} from '../lib/connection-storage';
+import { loadConnectionSecrets } from '../lib/credential-storage';
 import { toast } from 'sonner';
 import {
   Server,
@@ -94,6 +99,7 @@ export function ConnectionDialog({
   const [_savedProfiles, setSavedProfiles] = useState<ConnectionProfile[]>([]);
   const [_showSaveProfile, setShowSaveProfile] = useState(false);
   const [saveAsConnection, setSaveAsConnection] = useState(true);
+  const [rememberPassword, setRememberPassword] = useState(true);
   const { t } = useTranslation();
   const [connectionFolder, setConnectionFolder] = useState('All Connections');
   const [availableFolders, setAvailableFolders] = useState<string[]>([]);
@@ -115,16 +121,25 @@ export function ConnectionDialog({
 
       // Load editing connection data into config when dialog opens
       if (editingConnection) {
+        const { password: _password, passphrase: _passphrase, ...connectionWithoutSecrets } = editingConnection;
         setConfig({
           ...defaultConfig,
-          ...editingConnection
+          ...connectionWithoutSecrets,
+          password: '',
+          passphrase: '',
         });
         // When editing, don't show "save as connection" since it already exists
         setSaveAsConnection(false);
+        
+        const storedConnection = editingConnection.id
+          ? ConnectionStorageManager.getConnection(editingConnection.id)
+          : undefined;
+        setRememberPassword(!!storedConnection?.hasStoredPassword || !!storedConnection?.hasStoredPassphrase);
       } else {
         // Reset to defaults for new connection
         setConfig(defaultConfig);
         setSaveAsConnection(true);
+        setRememberPassword(true);
       }
     } else {
       // Reset connection state when dialog closes
@@ -198,6 +213,18 @@ export function ConnectionDialog({
     const connectionId = editingConnection?.id || `connection-${Date.now()}`;
     connectionIdRef.current = connectionId;
 
+    const storedConnection = editingConnection?.id
+      ? ConnectionStorageManager.getConnection(editingConnection.id)
+      : undefined;
+    const storedSecrets = editingConnection?.id
+      ? await loadConnectionSecrets(editingConnection.id, {
+          hasStoredPassword: storedConnection?.hasStoredPassword,
+          hasStoredPassphrase: storedConnection?.hasStoredPassphrase,
+        })
+      : {};
+    const resolvedPassword = config.password || storedSecrets.password || '';
+    const resolvedPassphrase = config.passphrase || storedSecrets.passphrase || '';
+
     // Basic validation — anonymous FTP doesn't require a username
     const requiresUsername = config.authMethod !== 'anonymous';
     if (!config.name || !config.host || (requiresUsername && !config.username)) {
@@ -211,7 +238,7 @@ export function ConnectionDialog({
     }
 
     // Validate authentication method specific fields
-    if (config.authMethod === 'password' && !config.password) {
+    if (config.authMethod === 'password' && !resolvedPassword) {
       toast.error(t('connectionDialog.toast.passwordRequired'), {
         description: t('connectionDialog.toast.passwordRequiredDesc'),
       });
@@ -235,21 +262,29 @@ export function ConnectionDialog({
       try {
         // Save connection if requested
         if (editingConnection?.id) {
-          ConnectionStorageManager.updateConnection(editingConnection.id, {
-            name: config.name,
-            host: config.host,
-            port: config.port || (config.protocol === 'FTP' ? 21 : 22),
-            username: config.username,
-            protocol: config.protocol,
-            authMethod: config.authMethod,
-            password: config.password,
-            privateKeyPath: config.privateKeyPath,
-            passphrase: config.passphrase,
-            ftpsEnabled: config.ftpsEnabled,
-            lastConnected: new Date().toISOString(),
-          });
+          await updateConnectionWithCredentials(
+            editingConnection.id,
+            {
+              name: config.name,
+              host: config.host,
+              port: config.port || (config.protocol === 'FTP' ? 21 : 22),
+              username: config.username,
+              protocol: config.protocol,
+              authMethod: config.authMethod,
+              privateKeyPath: config.privateKeyPath,
+              ftpsEnabled: config.ftpsEnabled,
+              lastConnected: new Date().toISOString(),
+            },
+            {
+              password: config.password || undefined,
+              passphrase: config.passphrase || undefined,
+            },
+            {
+              rememberPassword,
+            },
+          );
         } else if (saveAsConnection) {
-          ConnectionStorageManager.saveConnectionWithId(connectionId, {
+          await saveConnectionWithCredentials(connectionId, {
             name: config.name,
             host: config.host,
             port: config.port || (config.protocol === 'FTP' ? 21 : 22),
@@ -257,15 +292,23 @@ export function ConnectionDialog({
             protocol: config.protocol,
             folder: connectionFolder,
             authMethod: config.authMethod,
-            password: config.password,
             privateKeyPath: config.privateKeyPath,
-            passphrase: config.passphrase,
             ftpsEnabled: config.ftpsEnabled,
+          }, {
+            password: config.password || undefined,
+            passphrase: config.passphrase || undefined,
+          }, {
+            rememberPassword,
           });
         }
 
         // Delegate actual connection to App.tsx handler
-        onConnect({ ...config, id: connectionId });
+        onConnect({
+          ...config,
+          id: connectionId,
+          password: resolvedPassword || undefined,
+          passphrase: resolvedPassphrase || undefined,
+        });
         onOpenChange(false);
 
         if (!editingConnection) {
@@ -288,9 +331,9 @@ export function ConnectionDialog({
             port: config.port || 22,
             username: config.username,
             auth_method: config.authMethod || 'password',
-            password: config.password || '',
+            password: resolvedPassword,
             key_path: config.privateKeyPath || null,
-            passphrase: config.passphrase || null,
+            passphrase: resolvedPassphrase || null,
           }
         }
       );
@@ -298,23 +341,28 @@ export function ConnectionDialog({
       if (result.success) {
         // Save or update connection based on whether we're editing or creating new
         if (editingConnection?.id) {
-          // Update existing connection with new connection details
-          ConnectionStorageManager.updateConnection(editingConnection.id, {
-            name: config.name,
-            host: config.host,
-            port: config.port || 22,
-            username: config.username,
-            protocol: config.protocol,
-            authMethod: config.authMethod,
-            password: config.password,
-            privateKeyPath: config.privateKeyPath,
-            passphrase: config.passphrase,
-            lastConnected: new Date().toISOString(),
-          });
+          await updateConnectionWithCredentials(
+            editingConnection.id,
+            {
+              name: config.name,
+              host: config.host,
+              port: config.port || 22,
+              username: config.username,
+              protocol: config.protocol,
+              authMethod: config.authMethod,
+              privateKeyPath: config.privateKeyPath,
+              lastConnected: new Date().toISOString(),
+            },
+            {
+              password: config.password || undefined,
+              passphrase: config.passphrase || undefined,
+            },
+            {
+              rememberPassword,
+            },
+          );
         } else if (saveAsConnection) {
-          // Save new connection with the same ID used for the SSH connection
-          // This ensures the tab ID matches the connection ID in storage
-          ConnectionStorageManager.saveConnectionWithId(connectionId, {
+          await saveConnectionWithCredentials(connectionId, {
             name: config.name,
             host: config.host,
             port: config.port || 22,
@@ -322,9 +370,12 @@ export function ConnectionDialog({
             protocol: config.protocol,
             folder: connectionFolder,
             authMethod: config.authMethod,
-            password: config.password,
             privateKeyPath: config.privateKeyPath,
-            passphrase: config.passphrase,
+          }, {
+            password: config.password || undefined,
+            passphrase: config.passphrase || undefined,
+          }, {
+            rememberPassword,
           });
         }
 
@@ -884,6 +935,22 @@ export function ConnectionDialog({
                     </SelectContent>
                   </Select>
                 )}
+              </div>
+            )}
+
+            {/* Remember Password Option */}
+            {(editingConnection || saveAsConnection) && (config.authMethod === 'password' || config.authMethod === 'publickey') && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="remember-password"
+                    checked={rememberPassword}
+                    onCheckedChange={setRememberPassword}
+                  />
+                  <Label htmlFor="remember-password" className="text-sm cursor-pointer">
+                    {t('connectionDialog.rememberPassword')}
+                  </Label>
+                </div>
               </div>
             )}
 

@@ -1,6 +1,6 @@
 # skd
 
-skd is a lightweight terminal workspace focused on SSH, local shells, SFTP file management, host profiles, and proxy-based connections.
+skd is a macOS lightweight terminal workspace focused on SSH, local shells, SFTP file management, host profiles, and proxy-based connections.
 
 ## Features
 
@@ -21,6 +21,12 @@ skd is a lightweight terminal workspace focused on SSH, local shells, SFTP file 
 - **CodeMirror 6** — Remote file editor
 - **react-i18next** — User-facing strings
 
+## Requirements
+
+- macOS (Apple Silicon or Intel)
+- Node.js + pnpm
+- Rust toolchain
+
 ## Development
 
 ```bash
@@ -38,6 +44,8 @@ cd src-tauri && cargo test   # Rust unit tests
 ```
 
 ## Build
+
+Produces a macOS `.app` bundle and `.dmg` installer:
 
 ```bash
 pnpm build && pnpm tauri build

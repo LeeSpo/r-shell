@@ -33,7 +33,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
-import { ConnectionStorageManager } from '../lib/connection-storage';
+import {
+  ConnectionStorageManager,
+  deleteConnectionWithCredentials,
+  duplicateConnectionWithCredentials,
+} from '../lib/connection-storage';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -114,8 +118,8 @@ export function ConnectionManager({
   }, [activeConnections]);
 
   // Handle connection deletion
-  const handleDelete = (connectionId: string) => {
-    if (ConnectionStorageManager.deleteConnection(connectionId)) {
+  const handleDelete = async (connectionId: string) => {
+    if (await deleteConnectionWithCredentials(connectionId)) {
       setConnections(loadConnections());
       toast.success(t('connectionManager.connectionDeleted'));
       if (onDeleteConnection) {
@@ -127,28 +131,26 @@ export function ConnectionManager({
   };
 
   // Handle connection duplication
-  const handleDuplicate = (node: ConnectionNode) => {
+  const handleDuplicate = async (node: ConnectionNode) => {
     if (node.type === 'connection' && node.host) {
-      // Load the full connection data to get authentication credentials
       const connectionData = ConnectionStorageManager.getConnection(node.id);
       if (connectionData) {
-        const duplicated = ConnectionStorageManager.saveConnection({
+        const duplicated = await duplicateConnectionWithCredentials(node.id, {
           name: `${node.name} (Copy)`,
           host: node.host,
           port: node.port || 22,
           username: node.username || '',
           protocol: node.protocol || 'SSH',
           folder: connectionData.folder || 'All Connections',
-          // Copy authentication credentials
           authMethod: connectionData.authMethod,
-          password: connectionData.password,
           privateKeyPath: connectionData.privateKeyPath,
-          passphrase: connectionData.passphrase,
         });
-        setConnections(loadConnections());
-        toast.success(t('connectionManager.duplicated', { name: duplicated.name }));
-        if (onDuplicateConnection) {
-          onDuplicateConnection(node);
+        if (duplicated) {
+          setConnections(loadConnections());
+          toast.success(t('connectionManager.duplicated', { name: duplicated.name }));
+          if (onDuplicateConnection) {
+            onDuplicateConnection(node);
+          }
         }
       }
     }

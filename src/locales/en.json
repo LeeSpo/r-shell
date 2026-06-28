@@ -68,6 +68,9 @@
     "failedToOpenWindow": "Failed to open file window",
     "couldNotOpenWindow": "Could not open file window",
     "noCredentialsDesc": "No saved credentials found. Please connect manually.",
+    "restoreHighlight": {
+      "encryptedSecrets": "Secrets stay encrypted in macOS Keychain"
+    },
     "noEditorHandler": "Cannot open {{name}}: no editor handler available",
     "monitor": "Monitor",
     "logs": "Logs",
@@ -164,6 +167,7 @@
       "socks5": "SOCKS5"
     },
     "saveAsConnection": "Save as persistent connection",
+    "rememberPassword": "Remember Password",
     "selectFolder": "Select folder",
     "allConnections": "All Connections",
     "button": {
@@ -263,8 +267,6 @@
       "desc": "Configure security options and authentication settings.",
       "hostKeyVerification": "Host Key Verification",
       "hostKeyVerificationDesc": "Verify SSH host keys for enhanced security",
-      "savePasswords": "Save Passwords",
-      "savePasswordsDesc": "Store passwords locally (encrypted)",
       "autoLockTimeout": "Auto Lock Timeout: {{timeout}} minutes",
       "autoLockTimeoutDesc": "Automatically lock the application after this period of inactivity"
     },

@@ -12,7 +12,14 @@ import { SettingsModal } from './components/settings-modal';
 import { IntegratedFileBrowser } from './components/integrated-file-browser';
 import { WelcomeScreen } from './components/welcome-screen';
 import { UpdateChecker } from './components/update-checker';
-import { ActiveConnectionsManager, ConnectionStorageManager } from './lib/connection-storage';
+import {
+  ActiveConnectionsManager,
+  ConnectionStorageManager,
+  connectionHasStoredCredentials,
+  getConnectionWithCredentials,
+  migratePlaintextCredentialsToKeychain,
+} from './lib/connection-storage';
+import { isSavePasswordsEnabled } from './lib/credential-storage';
 
 import { registerRestoration, clearAllRestorations } from './lib/restoration-manager';
 import { useLayout, LayoutProvider } from './lib/layout-context';
@@ -234,6 +241,12 @@ function AppContent() {
     const OVERALL_RESTORE_TIMEOUT_MS = 60_000; // 60 s for the entire restore
 
     const restoreConnections = async () => {
+      try {
+        await migratePlaintextCredentialsToKeychain();
+      } catch (error: unknown) {
+        console.error('Failed to migrate credentials to Keychain:', error);
+      }
+
       const activeConnections = ActiveConnectionsManager.getActiveConnections();
 
       if (activeConnections.length === 0) {
@@ -260,31 +273,33 @@ function AppContent() {
       for (let i = 0; i < sortedConnections.length; i++) {
         const activeConn = sortedConnections[i];
         const connectionIdToLoad = activeConn.originalConnectionId || activeConn.connectionId;
-        const connectionData = ConnectionStorageManager.getConnection(connectionIdToLoad);
+        const connectionMeta = ConnectionStorageManager.getConnection(connectionIdToLoad);
 
         setRestoringProgress({ current: i + 1, total: sortedConnections.length });
 
-        if (!connectionData) {
+        if (!connectionMeta) {
           console.warn(`Connection ${connectionIdToLoad} not found in storage`);
           failedCount++;
           continue;
         }
 
         const supportedProtocols = ['SSH', 'SFTP', 'FTP'];
-        if (!supportedProtocols.includes(connectionData.protocol)) {
+        if (!supportedProtocols.includes(connectionMeta.protocol)) {
           console.warn(
-            `Skipping unsupported connection restore: ${connectionData.name} (${connectionData.protocol})`,
+            `Skipping unsupported connection restore: ${connectionMeta.name} (${connectionMeta.protocol})`,
           );
           failedCount++;
           continue;
         }
 
-        const hasCredentials = connectionData.authMethod === 'password'
-          ? !!connectionData.password
-          : (connectionData.authMethod === 'anonymous' ? true : !!connectionData.privateKeyPath);
+        if (!connectionHasStoredCredentials(connectionMeta)) {
+          console.log(`Connection ${connectionMeta.name} has no saved credentials, skipping restore`);
+          failedCount++;
+          continue;
+        }
 
-        if (!hasCredentials) {
-          console.log(`Connection ${connectionData.name} has no saved credentials, skipping restore`);
+        const connectionData = await getConnectionWithCredentials(connectionIdToLoad);
+        if (!connectionData) {
           failedCount++;
           continue;
         }
@@ -470,7 +485,7 @@ function AppContent() {
     }
   }, [isRestoring, allTabs.length, handleNewLocalTab]);
 
-  const handleConnectionSelect = (connection: ConnectionNode) => {
+  const handleConnectionSelect = async (connection: ConnectionNode) => {
     if (connection.type === 'connection') {
       setSelectedConnection(connection);
     }
@@ -486,34 +501,29 @@ function AppContent() {
         tab => tab.id === connection.id || tab.originalConnectionId === connection.id
       );
 
-      const connectionData = ConnectionStorageManager.getConnection(connection.id);
-      if (!connectionData) return;
+      const connectionMeta = ConnectionStorageManager.getConnection(connection.id);
+      if (!connectionMeta) return;
 
-      const isSftp = connectionData.protocol === 'SFTP';
-      const isFtp = connectionData.protocol === 'FTP';
+      const isSftp = connectionMeta.protocol === 'SFTP';
+      const isFtp = connectionMeta.protocol === 'FTP';
       const isFileBrowser = isSftp || isFtp;
 
-      const hasCredentials = isFileBrowser
-        ? (connectionData.authMethod === 'anonymous' || connectionData.authMethod === 'password'
-          ? (connectionData.authMethod === 'anonymous' || !!connectionData.password)
-          : !!connectionData.privateKeyPath)
-        : (connectionData.authMethod === 'password'
-          ? !!connectionData.password
-          : !!connectionData.privateKeyPath);
-
-      if (!hasCredentials) {
+      if (!connectionHasStoredCredentials(connectionMeta)) {
         setEditingConnection({
           id: connection.id,
-          name: connectionData.name,
-          protocol: connectionData.protocol as ConnectionConfig['protocol'],
-          host: connectionData.host,
-          port: connectionData.port,
-          username: connectionData.username,
-          authMethod: connectionData.authMethod || 'password',
+          name: connectionMeta.name,
+          protocol: connectionMeta.protocol as ConnectionConfig['protocol'],
+          host: connectionMeta.host,
+          port: connectionMeta.port,
+          username: connectionMeta.username,
+          authMethod: connectionMeta.authMethod || 'password',
         });
         setConnectionDialogOpen(true);
         return;
       }
+
+      const connectionData = await getConnectionWithCredentials(connection.id);
+      if (!connectionData) return;
 
       // Use a unique session ID if the connection already exists anywhere
       const sessionId = existsAnywhere
@@ -704,27 +714,29 @@ function AppContent() {
     }
 
     const originalConnectionId = tabToDuplicate.originalConnectionId || tabId;
-    const connectionData = ConnectionStorageManager.getConnection(originalConnectionId);
-    if (!connectionData) {
+    const connectionMeta = ConnectionStorageManager.getConnection(originalConnectionId);
+    if (!connectionMeta) {
       toast.error(t('app.cannotDuplicate'), {
         description: t('app.cannotDuplicateDesc'),
       });
       return;
     }
 
-    const isSftp = tabToDuplicate.protocol === 'SFTP' || connectionData.protocol === 'SFTP';
-    const isFtp = tabToDuplicate.protocol === 'FTP' || connectionData.protocol === 'FTP';
+    const isSftp = tabToDuplicate.protocol === 'SFTP' || connectionMeta.protocol === 'SFTP';
+    const isFtp = tabToDuplicate.protocol === 'FTP' || connectionMeta.protocol === 'FTP';
     const isFileBrowser = isSftp || isFtp;
 
-    const hasCredentials = isFileBrowser
-      ? (connectionData.authMethod === 'anonymous' || !!connectionData.password || !!connectionData.privateKeyPath)
-      : (connectionData.authMethod === 'password'
-        ? !!connectionData.password
-        : !!connectionData.privateKeyPath);
-
-    if (!hasCredentials) {
+    if (!connectionHasStoredCredentials(connectionMeta)) {
       toast.error(t('app.cannotDuplicate'), {
         description: t('app.noCredentialsDesc'),
+      });
+      return;
+    }
+
+    const connectionData = await getConnectionWithCredentials(originalConnectionId);
+    if (!connectionData) {
+      toast.error(t('app.cannotDuplicate'), {
+        description: t('app.cannotDuplicateDesc'),
       });
       return;
     }
@@ -851,38 +863,40 @@ function AppContent() {
     }
 
     const originalConnectionId = tabToReconnect.originalConnectionId || tabId;
-    const connectionData = ConnectionStorageManager.getConnection(originalConnectionId);
-    if (!connectionData) {
+    const connectionMeta = ConnectionStorageManager.getConnection(originalConnectionId);
+    if (!connectionMeta) {
       toast.error(t('app.cannotReconnect'), {
         description: t('app.cannotReconnectDesc'),
       });
       return;
     }
 
-    const isSftp = tabToReconnect.protocol === 'SFTP' || connectionData.protocol === 'SFTP';
-    const isFtp = tabToReconnect.protocol === 'FTP' || connectionData.protocol === 'FTP';
+    const isSftp = tabToReconnect.protocol === 'SFTP' || connectionMeta.protocol === 'SFTP';
+    const isFtp = tabToReconnect.protocol === 'FTP' || connectionMeta.protocol === 'FTP';
     const isFileBrowser = isSftp || isFtp;
 
-    const hasCredentials = isFileBrowser
-      ? (connectionData.authMethod === 'anonymous' || !!connectionData.password || !!connectionData.privateKeyPath)
-      : (connectionData.authMethod === 'password'
-        ? !!connectionData.password
-        : !!connectionData.privateKeyPath);
-
-    if (!hasCredentials) {
+    if (!connectionHasStoredCredentials(connectionMeta)) {
       toast.error(t('app.cannotReconnect'), {
         description: t('app.noCredentialsDesc'),
       });
       setEditingConnection({
         id: originalConnectionId,
-        name: connectionData.name,
-        protocol: connectionData.protocol as ConnectionConfig['protocol'],
-        host: connectionData.host,
-        port: connectionData.port,
-        username: connectionData.username,
-        authMethod: connectionData.authMethod || 'password',
+        name: connectionMeta.name,
+        protocol: connectionMeta.protocol as ConnectionConfig['protocol'],
+        host: connectionMeta.host,
+        port: connectionMeta.port,
+        username: connectionMeta.username,
+        authMethod: connectionMeta.authMethod || 'password',
       });
       setConnectionDialogOpen(true);
+      return;
+    }
+
+    const connectionData = await getConnectionWithCredentials(originalConnectionId);
+    if (!connectionData) {
+      toast.error(t('app.cannotReconnect'), {
+        description: t('app.cannotReconnectDesc'),
+      });
       return;
     }
 
@@ -1264,9 +1278,7 @@ function AppContent() {
           port: connectionData.port,
           username: connectionData.username,
           authMethod: connectionData.authMethod || 'password',
-          password: connectionData.password,
           privateKeyPath: connectionData.privateKeyPath,
-          passphrase: connectionData.passphrase,
         });
         setConnectionDialogOpen(true);
       } else {
@@ -1300,35 +1312,37 @@ function AppContent() {
       return;
     }
 
-    const connectionData = ConnectionStorageManager.getConnection(connectionId);
-    if (!connectionData) {
+    const connectionMeta = ConnectionStorageManager.getConnection(connectionId);
+    if (!connectionMeta) {
       toast.error('Connection Not Found', {
         description: 'The connection could not be found. It may have been deleted.',
       });
       return;
     }
 
-    const isSftp = connectionData.protocol === 'SFTP';
-    const isFtp = connectionData.protocol === 'FTP';
+    const isSftp = connectionMeta.protocol === 'SFTP';
+    const isFtp = connectionMeta.protocol === 'FTP';
     const isFileBrowser = isSftp || isFtp;
 
-    const hasCredentials = isFileBrowser
-      ? (connectionData.authMethod === 'anonymous' || !!connectionData.password || !!connectionData.privateKeyPath)
-      : (connectionData.authMethod === 'password'
-        ? !!connectionData.password
-        : !!connectionData.privateKeyPath);
-
-    if (!hasCredentials) {
+    if (!connectionHasStoredCredentials(connectionMeta)) {
       setEditingConnection({
-        id: connectionData.id,
-        name: connectionData.name,
-        protocol: connectionData.protocol as ConnectionConfig['protocol'],
-        host: connectionData.host,
-        port: connectionData.port,
-        username: connectionData.username,
-        authMethod: connectionData.authMethod || 'password',
+        id: connectionMeta.id,
+        name: connectionMeta.name,
+        protocol: connectionMeta.protocol as ConnectionConfig['protocol'],
+        host: connectionMeta.host,
+        port: connectionMeta.port,
+        username: connectionMeta.username,
+        authMethod: connectionMeta.authMethod || 'password',
       });
       setConnectionDialogOpen(true);
+      return;
+    }
+
+    const connectionData = await getConnectionWithCredentials(connectionId);
+    if (!connectionData) {
+      toast.error('Connection Not Found', {
+        description: 'The connection could not be found. It may have been deleted.',
+      });
       return;
     }
 
@@ -1428,13 +1442,13 @@ function AppContent() {
     ? 0
     : Math.min(100, Math.round((restoringProgress.current / restoringProgress.total) * 100));
 
-  const restoreHighlights = useMemo(() => (
-    [
-      { icon: ShieldCheck, label: 'Secrets stay encrypted locally' },
+  const restoreHighlights = useMemo(() => {
+    return [
+      { icon: ShieldCheck, label: t('app.restoreHighlight.encryptedSecrets') },
       { icon: PlugZap, label: 'Auto reconnect with retry' },
       { icon: Activity, label: 'Live status monitoring' },
-    ]
-  ), []);
+    ];
+  }, [t]);
 
   // Check if there are any tabs across all groups
   const hasAnyTabs = allTabs.length > 0;
@@ -1516,43 +1530,8 @@ function AppContent() {
         </div>
       )}
 
-      {/* Web menu bar – on macOS shows only layout controls (native system menu handles File/Edit); on Windows/Linux shows full menus */}
       <MenuBar
-        onNewConnection={handleNewTab}
-        onNewLocalTerminal={() => { void handleNewLocalTab(); }}
-        onNewTab={handleNewTab}
-        onCloseConnection={() => {
-          if (activeGroup && activeGroup.activeTabId) {
-            void handleTabClose(activeGroup.activeTabId);
-            dispatch({ type: 'REMOVE_TAB', groupId: activeGroup.id, tabId: activeGroup.activeTabId });
-          }
-        }}
-        onNextTab={() => {
-          if (activeGroup && activeGroup.tabs.length > 1 && activeGroup.activeTabId) {
-            const currentIndex = activeGroup.tabs.findIndex(t => t.id === activeGroup.activeTabId);
-            if (currentIndex < activeGroup.tabs.length - 1) {
-              dispatch({ type: 'ACTIVATE_TAB', groupId: activeGroup.id, tabId: activeGroup.tabs[currentIndex + 1].id });
-            }
-          }
-        }}
-        onPreviousTab={() => {
-          if (activeGroup && activeGroup.tabs.length > 1 && activeGroup.activeTabId) {
-            const currentIndex = activeGroup.tabs.findIndex(t => t.id === activeGroup.activeTabId);
-            if (currentIndex > 0) {
-              dispatch({ type: 'ACTIVATE_TAB', groupId: activeGroup.id, tabId: activeGroup.tabs[currentIndex - 1].id });
-            }
-          }
-        }}
-        onCloneTab={() => {
-          if (activeTab) {
-            void handleDuplicateTab(activeTab.id);
-          }
-        }}
         onOpenSettings={handleOpenSettings}
-        onCheckForUpdates={() => setUpdateCheckSignal((current) => current + 1)}
-        closeConnectionShortcutLabel={keyboardShortcutSettings.closeTab}
-        hasActiveConnection={!!activeTab}
-        canPaste={true}
         onToggleLeftSidebar={toggleLeftSidebar}
         onToggleRightSidebar={toggleRightSidebar}
         onToggleBottomPanel={toggleBottomPanel}

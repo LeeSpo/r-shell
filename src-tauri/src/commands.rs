@@ -2685,14 +2685,11 @@ pub async fn list_local_files(path: String) -> Result<Vec<FileEntry>, String> {
             format_unix_timestamp(secs)
         });
 
-        #[cfg(unix)]
         let permissions = {
             use std::os::unix::fs::PermissionsExt;
             let mode = metadata.permissions().mode();
             Some(format_unix_permissions(mode))
         };
-        #[cfg(not(unix))]
-        let permissions: Option<String> = None;
 
         entries.push(FileEntry {
             name,
@@ -2772,7 +2769,6 @@ fn is_leap_year(y: i64) -> bool {
 }
 
 /// Format Unix file mode bits into a human-readable rwx string.
-#[cfg(unix)]
 fn format_unix_permissions(mode: u32) -> String {
     let mut s = String::with_capacity(10);
     // File type
@@ -2859,8 +2855,7 @@ pub struct LocalPathStat {
 pub async fn stat_local_path(path: String) -> Result<LocalPathStat, String> {
     use std::fs;
     let p = std::path::Path::new(&path);
-    // `symlink_metadata` never follows the link — works on Windows without the
-    // SE_CREATE_SYMBOLIC_LINK privilege.
+    // `symlink_metadata` never follows the link on macOS.
     let sym = match fs::symlink_metadata(p) {
         Ok(m) => m,
         Err(_) => {
@@ -3147,30 +3142,46 @@ fn matches_exclude(name: &str, patterns: &[String]) -> bool {
     false
 }
 
+// ========== Credential Storage (macOS Keychain) ==========
+
+#[tauri::command]
+pub fn store_connection_secret(
+    connection_id: String,
+    secret_type: String,
+    secret: String,
+) -> Result<(), String> {
+    crate::credential_store::store_connection_secret(&connection_id, &secret_type, &secret)
+}
+
+#[tauri::command]
+pub fn get_connection_secret(
+    connection_id: String,
+    secret_type: String,
+) -> Result<Option<String>, String> {
+    crate::credential_store::get_connection_secret(&connection_id, &secret_type)
+}
+
+#[tauri::command]
+pub fn delete_connection_secrets(connection_id: String) -> Result<(), String> {
+    crate::credential_store::delete_connection_secrets(&connection_id)
+}
+
 // ========== Native Menu i18n ==========
 
 /// Rebuild the native macOS menu bar with translated labels from the frontend.
-/// On non-macOS platforms this is a no-op.
 #[tauri::command]
 pub async fn update_menu_language(
     app: tauri::AppHandle,
     translations: std::collections::HashMap<String, String>,
 ) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        let menu = crate::build_app_menu(&app, move |key: &str| {
-            translations
-                .get(key)
-                .cloned()
-                .unwrap_or_else(|| crate::default_menu_text(key))
-        })
-        .map_err(|e| e.to_string())?;
-        app.set_menu(menu).map_err(|e| e.to_string())?;
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (app, translations);
-    }
+    let menu = crate::build_app_menu(&app, move |key: &str| {
+        translations
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| crate::default_menu_text(key))
+    })
+    .map_err(|e| e.to_string())?;
+    app.set_menu(menu).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -3285,7 +3296,6 @@ mod local_fs_tests {
     }
 
     #[test]
-    #[cfg(unix)]
     fn test_format_unix_permissions() {
         assert_eq!(format_unix_permissions(0o100644), "-rw-r--r--");
         assert_eq!(format_unix_permissions(0o040755), "drwxr-xr-x");

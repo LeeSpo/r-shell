@@ -55,7 +55,7 @@ describe('connection-storage SFTP/FTP property tests', () => {
       );
     });
 
-    it('saved SFTP connection preserves publickey auth fields', () => {
+    it('saved SFTP connection preserves publickey auth fields without persisting passphrase', () => {
       const conn = ConnectionStorageManager.saveConnection({
         name: 'SFTP Test',
         host: '10.0.0.1',
@@ -65,13 +65,18 @@ describe('connection-storage SFTP/FTP property tests', () => {
         authMethod: 'publickey',
         privateKeyPath: '~/.ssh/id_ed25519',
         passphrase: 'my-passphrase',
+        hasStoredPassphrase: true,
       });
 
       const loaded = ConnectionStorageManager.getConnection(conn.id);
       expect(loaded!.protocol).toBe('SFTP');
       expect(loaded!.authMethod).toBe('publickey');
       expect(loaded!.privateKeyPath).toBe('~/.ssh/id_ed25519');
-      expect(loaded!.passphrase).toBe('my-passphrase');
+      expect(loaded!.hasStoredPassphrase).toBe(true);
+      expect(loaded!.passphrase).toBeUndefined();
+
+      const storedRaw = localStorage.getItem('skd-connections') ?? '';
+      expect(storedRaw).not.toContain('my-passphrase');
     });
 
     it('saved FTP connection preserves ftpsEnabled and anonymous auth', () => {

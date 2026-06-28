@@ -33,16 +33,7 @@ interface TerminalContextMenuProps {
   searchActive?: boolean;
 }
 
-// Detect platform for keyboard shortcuts (using modern userAgentData with fallback)
-const isMac = typeof navigator !== 'undefined' && (
-  // Modern API (Chromium-based browsers)
-  (navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform === 'macOS' ||
-  // Fallback for other browsers
-  navigator.platform?.toUpperCase().indexOf('MAC') >= 0 ||
-  // Additional fallback using userAgent
-  /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent)
-);
-const modKey = isMac ? '⌘' : 'Ctrl';
+const modKey = '⌘';
 
 export function TerminalContextMenu({
   children,

@@ -7,17 +7,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-/// Resolve the user's default shell, with platform-specific fallbacks.
+/// Resolve the user's default shell on macOS.
 pub fn default_shell() -> String {
-    std::env::var("SHELL").unwrap_or_else(|_| {
-        if cfg!(target_os = "windows") {
-            "powershell.exe".to_string()
-        } else if cfg!(target_os = "macos") {
-            "/bin/zsh".to_string()
-        } else {
-            "/bin/bash".to_string()
-        }
-    })
+    std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())
 }
 
 /// Spawn a local interactive shell in a PTY and return a session handle
@@ -36,9 +28,7 @@ pub fn create_local_pty_session(cols: u32, rows: u32) -> Result<PtySession> {
 
     // Login shell so GUI-launched apps still load the user's profile (macOS apps
     // often lack a full shell environment compared to Terminal.app).
-    if !cfg!(target_os = "windows") {
-        cmd.arg("-l");
-    }
+    cmd.arg("-l");
 
     if let Some(home) = dirs::home_dir() {
         cmd.cwd(home.clone());

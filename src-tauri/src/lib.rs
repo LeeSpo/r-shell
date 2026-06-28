@@ -1,5 +1,6 @@
 mod commands;
 mod connection_manager;
+mod credential_store;
 mod ftp_client;
 mod local_shell;
 mod os_detect;
@@ -18,9 +19,7 @@ use websocket_server::WebSocketServer;
 pub static WEBSOCKET_PORT: AtomicU16 = AtomicU16::new(0);
 
 /// Build the native macOS menu bar (File / Edit / Tools / Connection / Window).
-/// Only compiled on macOS; other platforms keep the web-based MenuBar component.
 /// `t` is a lookup function: given a key like "menuBar.file", returns the translated string.
-#[cfg(target_os = "macos")]
 fn build_app_menu<F: Fn(&str) -> String>(
     app: &tauri::AppHandle,
     t: F,
@@ -176,7 +175,6 @@ fn build_app_menu<F: Fn(&str) -> String>(
 }
 
 /// English fallback for menu translations when no frontend translations are available.
-#[cfg(target_os = "macos")]
 fn default_menu_text(key: &str) -> String {
     match key {
         "menuBar.file" => "File",
@@ -229,16 +227,13 @@ pub fn run() {
             let connection_manager_clone = connection_manager.clone();
             move |app| {
                 // Register native macOS menu and forward item events to the frontend
-                #[cfg(target_os = "macos")]
-                {
-                    match build_app_menu(&app.handle(), default_menu_text) {
-                        Ok(menu) => {
-                            if let Err(e) = app.set_menu(menu) {
-                                tracing::warn!("Failed to set native menu: {}", e);
-                            }
+                match build_app_menu(&app.handle(), default_menu_text) {
+                    Ok(menu) => {
+                        if let Err(e) = app.set_menu(menu) {
+                            tracing::warn!("Failed to set native menu: {}", e);
                         }
-                        Err(e) => tracing::warn!("Failed to build native menu: {}", e),
                     }
+                    Err(e) => tracing::warn!("Failed to build native menu: {}", e),
                 }
 
                 // Start WebSocket server for terminal I/O
@@ -316,6 +311,9 @@ pub fn run() {
             commands::list_local_files_recursive,
             commands::list_remote_files_recursive,
             commands::update_menu_language,
+            commands::store_connection_secret,
+            commands::get_connection_secret,
+            commands::delete_connection_secrets,
             // Note: PTY terminal I/O now uses WebSocket instead of IPC
             // WebSocket server runs on a dynamically assigned port (9001-9010)
         ])
