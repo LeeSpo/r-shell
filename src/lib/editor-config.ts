@@ -47,7 +47,7 @@ export const DEFAULT_EDITOR_CONFIG: EditorConfig = {
 
 // ---------- Storage ----------
 
-const STORAGE_KEY = "rshell-editor-config";
+const STORAGE_KEY = "skd-editor-config";
 
 export function loadEditorConfig(): EditorConfig {
   try {

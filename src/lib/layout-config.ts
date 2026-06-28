@@ -29,7 +29,7 @@ const DEFAULT_LAYOUT: LayoutConfig = {
   zenMode: false,
 };
 
-const LAYOUT_STORAGE_KEY = 'r-shell-layout-config';
+const LAYOUT_STORAGE_KEY = 'skd-layout-config';
 
 export class LayoutManager {
   /**

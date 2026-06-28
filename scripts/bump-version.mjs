@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * R-Shell Version Bump Script (Node.js version)
+ * skd Version Bump Script (Node.js version)
  * Cross-platform version bumping for Windows, macOS, and Linux
  */
 

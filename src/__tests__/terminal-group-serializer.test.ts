@@ -161,12 +161,12 @@ describe('migrateFromLegacy', () => {
   });
 
   it('removes legacy active connections key', () => {
-    localStorage.setItem('r-shell-active-connections', '[]');
+    localStorage.setItem('skd-active-connections', '[]');
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     migrateFromLegacy();
 
-    expect(localStorage.getItem('r-shell-active-connections')).toBeNull();
+    expect(localStorage.getItem('skd-active-connections')).toBeNull();
     expect(logSpy).toHaveBeenCalledOnce();
     logSpy.mockRestore();
   });
@@ -206,13 +206,13 @@ describe('migrateFromLegacy', () => {
   });
 
   it('preserves ConnectionData keys untouched', () => {
-    localStorage.setItem('r-shell-active-connections', '[]');
-    localStorage.setItem('r-shell-connections', '{"profiles":[]}');
+    localStorage.setItem('skd-active-connections', '[]');
+    localStorage.setItem('skd-connections', '{"profiles":[]}');
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     migrateFromLegacy();
 
-    expect(localStorage.getItem('r-shell-connections')).toBe('{"profiles":[]}');
+    expect(localStorage.getItem('skd-connections')).toBe('{"profiles":[]}');
     logSpy.mockRestore();
   });
 
@@ -226,13 +226,13 @@ describe('migrateFromLegacy', () => {
   });
 
   it('handles both legacy keys present simultaneously', () => {
-    localStorage.setItem('r-shell-active-connections', '[]');
+    localStorage.setItem('skd-active-connections', '[]');
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ tabs: [] }));
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     migrateFromLegacy();
 
-    expect(localStorage.getItem('r-shell-active-connections')).toBeNull();
+    expect(localStorage.getItem('skd-active-connections')).toBeNull();
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     expect(logSpy).toHaveBeenCalledOnce();
     logSpy.mockRestore();

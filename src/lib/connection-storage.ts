@@ -35,12 +35,12 @@ export interface ConnectionFolder {
   createdAt: string;
 }
 
-const CONNECTIONS_STORAGE_KEY = 'r-shell-connections';
-const FOLDERS_STORAGE_KEY = 'r-shell-connection-folders';
+const CONNECTIONS_STORAGE_KEY = 'skd-connections';
+const FOLDERS_STORAGE_KEY = 'skd-connection-folders';
 
 // Legacy keys for migration
-const LEGACY_SESSIONS_STORAGE_KEY = 'r-shell-sessions';
-const LEGACY_FOLDERS_STORAGE_KEY = 'r-shell-session-folders';
+const LEGACY_SESSIONS_STORAGE_KEY = 'skd-sessions';
+const LEGACY_FOLDERS_STORAGE_KEY = 'skd-session-folders';
 
 export class ConnectionStorageManager {
   /**
@@ -517,8 +517,8 @@ export interface ConnectionTreeNode {
  * Active Connections Manager
  * Tracks currently open tabs for connection persistence
  */
-const ACTIVE_CONNECTIONS_KEY = 'r-shell-active-connections';
-const LEGACY_ACTIVE_SESSIONS_KEY = 'r-shell-active-sessions';
+const ACTIVE_CONNECTIONS_KEY = 'skd-active-connections';
+const LEGACY_ACTIVE_SESSIONS_KEY = 'skd-active-sessions';
 
 export interface ActiveConnectionState {
   tabId: string;

@@ -1,6 +1,6 @@
 # Scripts Directory
 
-This directory contains utility scripts for R-Shell development and maintenance.
+This directory contains utility scripts for skd development and maintenance.
 
 ## Version Bumping Scripts
 

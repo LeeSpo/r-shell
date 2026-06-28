@@ -5,9 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-06-28
+
+### Changed
+
+- **Rebranded to skd**: Renamed the application from R-Shell to **skd** (`com.spo.skd` bundle identifier, `skd` npm/Cargo package)
+- **Version reset**: First skd release at `0.1.0`
+- **README rewritten**: Documentation now reflects the simplified SSH/SFTP/local-shell focus instead of upstream multi-protocol marketing
+- **localStorage keys**: Migrated storage prefix from `r-shell-*` to `skd-*` (no data migration from old keys)
+- **Auto-updater disabled**: In-app updater turned off until a project-specific release feed and signing keys are configured
+- **Attribution preserved**: MIT License and R-Shell origin documented in [LICENSE](LICENSE) and [NOTICE](NOTICE)
+
 ## [2.4.0] - 2026-06-26
 
-### 🌍 R-Shell 2.4 — Internationalization & Auto-Update
+### 🌍 skd 2.4 — Internationalization & Auto-Update
 
 This release introduces full app internationalization via `react-i18next` (with English and Simplified Chinese, plus system-locale auto-detection), adds a manual update checker that reads `latest.json` from the release feed, refreshes the dark-mode scrollbar styling, and modernizes the CI runner versions.
 
@@ -16,7 +27,7 @@ This release introduces full app internationalization via `react-i18next` (with 
 ### Added
 
 - 🌍 **App Internationalization (i18n)**: Integrated `react-i18next` to support multiple languages throughout the UI, with `en` (English) as the source locale and `zh-CN` (Simplified Chinese) translations
-- 🌐 **System Locale Language Preference**: Added an `AUTO` language option that detects and follows the OS locale on startup, so R-Shell launches in the user's system language by default
+- 🌐 **System Locale Language Preference**: Added an `AUTO` language option that detects and follows the OS locale on startup, so skd launches in the user's system language by default
 - 🔄 **Manual Update Check**: Added a manual update checker that reads `latest.json` published with each release, letting users check for newer versions from within the app
 
 ### Changed
@@ -31,7 +42,7 @@ This release introduces full app internationalization via `react-i18next` (with 
 
 ## [2.3.0] - 2026-06-14
 
-### 🖥️ R-Shell 2.3 — Tab Drag Reorder & Terminal Reliability
+### 🖥️ skd 2.3 — Tab Drag Reorder & Terminal Reliability
 
 This release adds drag-and-drop tab reordering in the terminal bar, fixes a directory-tree ref synchronization bug, normalizes terminal scrollback across sessions, and bumps key dependencies.
 
@@ -51,7 +62,7 @@ This release adds drag-and-drop tab reordering in the terminal bar, fixes a dire
 
 ## [2.2.0] - 2026-06-10
 
-### 📂 R-Shell 2.2 — OS-Native File Drag & Drop
+### 📂 skd 2.2 — OS-Native File Drag & Drop
 
 This release adds OS-native drag-and-drop support for mixed files and folders, with reliable coordinate event fallback handling.
 
@@ -69,7 +80,7 @@ This release adds OS-native drag-and-drop support for mixed files and folders, w
 
 ## [2.1.1] - 2026-06-09
 
-### 🖥️ R-Shell 2.1.1 — Terminal & File Browser Fixes
+### 🖥️ skd 2.1.1 — Terminal & File Browser Fixes
 
 ### Fixed
 
@@ -79,7 +90,7 @@ This release adds OS-native drag-and-drop support for mixed files and folders, w
 
 ## [2.1.0] - 2026-06-04
 
-### 🗂️ R-Shell 2.1 — Directory Tree & Terminal Stability
+### 🗂️ skd 2.1 — Directory Tree & Terminal Stability
 
 This release adds caching for the remote directory tree to preserve expand/collapse state and scroll position across tab switches, optimizes PTY terminal memory and flow control to prevent unbounded buffer growth, resolves keyboard shortcut conflicts, and fixes Windows SFTP upload compatibility.
 
@@ -96,7 +107,7 @@ This release adds caching for the remote directory tree to preserve expand/colla
 
 ## [2.0.0] - 2026-05-30
 
-### 🚀 R-Shell 2.0 — File Viewer & Performance
+### 🚀 skd 2.0 — File Viewer & Performance
 
 This major release introduces a dedicated popup window for viewing SSH files, improves OS-detection performance with concurrent-safe caching, and fixes terminal focus and scrollbar reliability.
 
@@ -116,7 +127,7 @@ This major release introduces a dedicated popup window for viewing SSH files, im
 
 ## [1.8.0] - 2026-05-21
 
-### 🔄 R-Shell 1.8 — Smarter Recovery & Window Controls
+### 🔄 skd 1.8 — Smarter Recovery & Window Controls
 
 This release improves terminal resilience with automatic PTY reconnect handling after dropped connections, and refines desktop window behavior with better drag-region double-click maximize support on non-macOS platforms.
 
@@ -135,7 +146,7 @@ This release improves terminal resilience with automatic PTY reconnect handling 
 
 ## [1.7.0] - 2026-05-16
 
-### 🔖 R-Shell 1.7 — Stable Sessions
+### 🔖 skd 1.7 — Stable Sessions
 
 This release brings long-lived connection reliability: SSH keepalive prevents servers from silently dropping idle sessions, and the PTY terminal now detects dropped connections gracefully instead of silently replacing the shell. A new lazy-loading directory tree, improved file browser toolbar, and robust path quoting round out the update.
 
@@ -157,7 +168,7 @@ This release brings long-lived connection reliability: SSH keepalive prevents se
 
 ## [1.6.0] - 2026-05-08
 
-### 🍎 R-Shell 1.6 — Native macOS Experience
+### 🍎 skd 1.6 — Native macOS Experience
 
 This release brings a native macOS menu bar, quick connect shortcuts, draggable window chrome, and improved SSH key compatibility across all platforms.
 
@@ -182,7 +193,7 @@ This release brings a native macOS menu bar, quick connect shortcuts, draggable 
 
 ## [1.5.0] - 2026-04-30
 
-### 🔁 R-Shell 1.5 — Reliable Reconnect
+### 🔁 skd 1.5 — Reliable Reconnect
 
 This release fixes reconnect flows that previously left the terminal permanently stuck after a network drop.
 
@@ -196,7 +207,7 @@ This release fixes reconnect flows that previously left the terminal permanently
 
 ## [1.4.0] - 2026-04-24
 
-### 🖥️ R-Shell 1.4 — OS Detection & Distro-Aware System Monitoring
+### 🖥️ skd 1.4 — OS Detection & Distro-Aware System Monitoring
 
 This release adds intelligent OS detection and cross-distro system monitoring, so CPU, memory, disk, and uptime metrics work correctly across different Linux distributions — not just the common case.
 
@@ -230,7 +241,7 @@ This release adds intelligent OS detection and cross-distro system monitoring, s
 
 - 📖 **README Enhanced**: Added performance metrics and lightweight positioning documentation
 
-### 🔄 R-Shell 1.3 — Multi-Connection Profiles & File Browser Polish
+### 🔄 skd 1.3 — Multi-Connection Profiles & File Browser Polish
 
 This release enables multiple simultaneous connections to the same server profile, adds a duplicate tab action, and significantly improves the SSH file browser with a unified transfer queue experience.
 
@@ -262,7 +273,7 @@ This release enables multiple simultaneous connections to the same server profil
 
 ## [1.2.0] - 2026-03-16
 
-### 🖥️ R-Shell 1.2 — Code Editor, Remote Desktop & Terminal Polish
+### 🖥️ skd 1.2 — Code Editor, Remote Desktop & Terminal Polish
 
 This release adds a built-in code editor with syntax highlighting, remote desktop protocol support, and several quality-of-life improvements across the terminal and file browser.
 
@@ -298,7 +309,7 @@ This release adds a built-in code editor with syntax highlighting, remote deskto
 
 ## [1.1.0] - 2026-03-01
 
-### 📂 R-Shell 1.1 — SFTP/FTP File Management & Developer Tooling
+### 📂 skd 1.1 — SFTP/FTP File Management & Developer Tooling
 
 This release introduces a full-featured dual-pane file manager with SFTP and FTP support, FileZilla-style directory synchronization, a redesigned Log Monitor, and a robust ESLint v10 setup with type-aware checking.
 
@@ -353,9 +364,9 @@ This release introduces a full-featured dual-pane file manager with SFTP and FTP
 
 ## [1.0.0] - 2026-02-28
 
-### 🎉 R-Shell 1.0 — Stable Release
+### 🎉 skd 1.0 — Stable Release
 
-This is the first stable major release of R-Shell, marking it as production-ready after months of iterative development. This release introduces a fully redesigned VS Code-style terminal group system, improved connection resilience, and a polished UI experience.
+This is the first stable major release of skd, marking it as production-ready after months of iterative development. This release introduces a fully redesigned VS Code-style terminal group system, improved connection resilience, and a polished UI experience.
 
 ### Added
 
@@ -552,7 +563,7 @@ This is the first stable major release of R-Shell, marking it as production-read
 ### Added
 
 - 🍺 **Homebrew Distribution**: Official Homebrew cask support for macOS
-  - Easy installation via `brew install --cask r-shell`
+  - Easy installation via `brew install --cask skd`
   - Automated release workflow with checksum generation
   - Auto-updating Homebrew tap on new releases
   - Support for both Intel and Apple Silicon Macs
@@ -717,7 +728,7 @@ This is the first stable major release of R-Shell, marking it as production-read
 ## [0.1.0] - 2025-10-30
 
 ### Added
-- 🎉 Initial release of R-Shell
+- 🎉 Initial release of skd
 - 🖥️ Multi-session SSH connection management with tabbed interface
 - 📁 Integrated file browser for remote file management
 - 📊 Real-time system monitoring (CPU, Memory, Disk, Processes)

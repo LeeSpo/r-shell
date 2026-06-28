@@ -466,7 +466,7 @@ mod tests {
 
         // 4b. Upload a file
         let tmp_upload = std::env::temp_dir().join("rshell_e2e_upload.txt");
-        let upload_content = b"Hello from R-Shell E2E test!\nLine 2\n";
+        let upload_content = b"Hello from skd E2E test!\nLine 2\n";
         tokio::fs::write(&tmp_upload, upload_content)
             .await
             .expect("write temp file");

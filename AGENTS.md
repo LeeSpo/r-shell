@@ -1,11 +1,15 @@
-# AGENTS.md — AI Agent Guide for R-Shell
+# AGENTS.md — AI Agent Guide for skd
 
 ## Project Summary
 
-R-Shell is a modern desktop SSH client built with **React 19 + TypeScript** (frontend) and **Tauri 2 + Rust** (backend). It provides interactive terminal sessions, SFTP file management, system monitoring, and multi-tab session management in a VS Code-like layout.
+**skd** is a lightweight SSH/SFTP terminal workspace built with **React 19 + TypeScript** (frontend) and **Tauri 2 + Rust** (backend). It focuses on interactive SSH and local shell sessions, SFTP file management, host profiles, proxy-based connections, and multi-tab terminal layout in a VS Code-like workspace.
 
-- **Repository**: `GOODBOY008/r-shell`
-- **Version**: 1.2.0
+This project is a fork of [R-Shell](https://github.com/GOODBOY008/r-shell) (MIT License). The current codebase has been simplified and rebranded; see [NOTICE](NOTICE) and [README](README) for attribution.
+
+- **App name**: `skd`
+- **Bundle identifier**: `com.spo.skd`
+- **Package name**: `skd` (npm / Cargo)
+- **Version**: 0.1.0
 - **Package Manager**: pnpm (v9.15.4)
 - **Node Target**: ES2020
 - **Rust Edition**: 2021
@@ -19,7 +23,7 @@ R-Shell is a modern desktop SSH client built with **React 19 + TypeScript** (fro
 | Layer | Location | Purpose |
 |-------|----------|---------|
 | Entry point | `src/main.tsx` → `src/App.tsx` | App bootstrap, layout, session restoration |
-| Feature components | `src/components/*.tsx` | Connection dialog, terminal, SFTP, monitors |
+| Feature components | `src/components/*.tsx` | Connection dialog, terminal, SFTP file browser, local shell |
 | Terminal subsystem | `src/components/terminal/` | Grid renderer, tab bar, context menu, search, drop zones |
 | Terminal addons | `src/components/terminal/addons/` | xterm.js addon wrappers |
 | UI primitives | `src/components/ui/` | 48+ shadcn/ui components (Radix-based) |
@@ -31,8 +35,11 @@ R-Shell is a modern desktop SSH client built with **React 19 + TypeScript** (fro
 | Module | File | Purpose |
 |--------|------|---------|
 | SSH client | `src-tauri/src/ssh/mod.rs` | Connection, auth (password/publickey), PTY, SFTP |
+| Local shell | `src-tauri/src/local_shell/` | Local PTY sessions via `portable-pty` |
+| SFTP client | `src-tauri/src/sftp_client.rs` | Standalone SFTP file operations |
+| FTP client | `src-tauri/src/ftp_client.rs` | Legacy FTP/FTPS support (not primary product focus) |
 | Connection manager | `src-tauri/src/connection_manager.rs` | Thread-safe session lifecycle (`Arc<RwLock<HashMap>>`) |
-| Tauri commands | `src-tauri/src/commands.rs` | 27+ IPC commands exposed to frontend |
+| Tauri commands | `src-tauri/src/commands.rs` | IPC commands exposed to frontend |
 | WebSocket server | `src-tauri/src/websocket_server.rs` | PTY I/O streaming on port 9001-9010 |
 | App setup | `src-tauri/src/lib.rs` | Plugin init, command registration, WS server spawn |
 
@@ -143,11 +150,11 @@ Updates `package.json`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`, `CHANGELO
 - **Path alias**: `@/*` maps to `./src/*` (configured in `tsconfig.json` and `vite.config.ts`)
 - **Styling**: Tailwind CSS with `cn()` utility from `src/lib/utils.ts` for conditional class merging
 - **UI components**: shadcn/ui pattern — Radix UI primitives + `class-variance-authority` for variants
-- **State management**: React context + `useReducer` for terminal groups; localStorage for persistence
+- **State management**: React context + `useReducer` for terminal groups; localStorage for persistence (`skd-*` key prefix)
 - **Error display**: `toast.error()` / `toast.success()` from `sonner` library
 - **Forms**: `react-hook-form`
 - **Icons**: `lucide-react`
-- **Terminal**: xterm.js v5 with addons (fit, search, web-links, webgl/canvas, image, unicode11, clipboard)
+- **Terminal**: xterm.js v6 with addons (fit, search, web-links, webgl, image, unicode11, clipboard)
 
 ### Rust
 
@@ -183,10 +190,11 @@ Terminal sessions use a reducer-based architecture:
 ### Connection Lifecycle
 
 1. User fills `ConnectionDialog` → `invoke('ssh_connect', { request })` → Rust `ConnectionManager::create_connection()`
-2. SSH client authenticates via `russh` (password or public key)
+2. SSH client authenticates via `russh` (password, public key, or keyboard-interactive); optional HTTP/SOCKS proxy
 3. Connection stored in `ConnectionManager.connections` HashMap
 4. For interactive terminal: frontend sends `StartPty` via WebSocket → Rust opens PTY channel → bidirectional streaming
-5. Disconnect: `invoke('ssh_disconnect')` → cleanup in both connection and PTY maps
+5. Local shell tabs use `local_shell_connect` / `local_shell_disconnect` instead of SSH
+6. Disconnect: `invoke('ssh_disconnect')` → cleanup in both connection and PTY maps
 
 ### Session Restoration
 
@@ -226,6 +234,8 @@ VS Code-like resizable panel layout with presets:
 | `tauri` | Desktop app framework |
 | `russh` / `russh-keys` | SSH protocol |
 | `russh-sftp` | SFTP file operations |
+| `portable-pty` | Local shell PTY |
+| `suppaftp` | FTP/FTPS (legacy, still in tree) |
 | `tokio` | Async runtime |
 | `tokio-tungstenite` | WebSocket server |
 | `tokio-util` | CancellationToken, utilities |
@@ -244,10 +254,13 @@ VS Code-like resizable panel layout with presets:
 5. **Server key verification**: Currently accepts all server keys (`check_server_key` returns `Ok(true)`). Not for production SSH security.
 6. **ESLint configured (v10 flat config)**: `eslint.config.js` uses `typescript-eslint` with type-aware checking, `react-hooks` v7, and `react-refresh`. Run `pnpm lint` to check, `pnpm lint:fix` to auto-fix. Test files and `src/components/ui/` are excluded or relaxed. Warnings are intentional for `no-unsafe-*` (Tauri invoke), `no-floating-promises` (fire-and-forget), and new react-hooks v7 rules (`set-state-in-effect`, `refs`, `purity`). When adding unused function parameters, prefix with `_`. When renaming destructured props to suppress unused warnings, use `{ propName: _propName }` syntax to keep the interface key intact.
 7. **`editor/` directory is empty**: `src-tauri/src/editor/` exists but contains no files — reserved for future use.
-8. **Release profile**: Rust release builds use LTO, single codegen unit, and symbol stripping for maximum optimization.
-9. **Radix Dialog centering in Tauri**: The base `DialogContent` from shadcn/ui uses `top-[50%] translate-y-[-50%]` centering. When a dialog is tall, this pushes its top half above the Tauri window viewport (there's no browser chrome to scroll to). **Always override** tall or variable-height dialogs with `!inset-0 !m-auto` centering instead, which keeps the dialog fully within the viewport.
-10. **Never use `h-fit` on a flex parent that has `flex-1` children**: `h-fit` makes the container size to its content, leaving zero remaining space for `flex-1` children to fill — they collapse to zero height and become invisible. When a dialog needs to grow to show dynamic content (e.g., comparison results in a scrollable area), use an explicit height like `h-[85vh]` so `flex-1` children have space to occupy. Use conditional height if the dialog should be compact when content is absent: `` `${hasContent ? "!h-[85vh]" : "!h-fit"}` ``.
-11. **IME / Input Method & keyboard input in xterm.js terminals**: Three rules to prevent swallowed keystrokes (Space, characters during fast typing, CJK composition):
+8. **Auto-updater disabled**: `tauri.conf.json` has `plugins.updater.active: false`. Re-enable only after configuring a release feed and signing keys for this project.
+9. **localStorage keys use `skd-` prefix**: e.g. `skd-connections`, `skd-terminal-groups`, `skd-layout-config`. No migration from old `r-shell-*` keys.
+10. **Legacy UI still mounted**: `system-monitor.tsx`, `log-monitor.tsx`, `sync-dialog.tsx`, and FTP protocol support remain in the codebase from the upstream fork but are not the primary product focus.
+11. **Release profile**: Rust release builds use LTO, single codegen unit, and symbol stripping for maximum optimization.
+12. **Radix Dialog centering in Tauri**: The base `DialogContent` from shadcn/ui uses `top-[50%] translate-y-[-50%]` centering. When a dialog is tall, this pushes its top half above the Tauri window viewport (there's no browser chrome to scroll to). **Always override** tall or variable-height dialogs with `!inset-0 !m-auto` centering instead, which keeps the dialog fully within the viewport.
+13. **Never use `h-fit` on a flex parent that has `flex-1` children**: `h-fit` makes the container size to its content, leaving zero remaining space for `flex-1` children to fill — they collapse to zero height and become invisible. When a dialog needs to grow to show dynamic content (e.g., comparison results in a scrollable area), use an explicit height like `h-[85vh]` so `flex-1` children have space to occupy. Use conditional height if the dialog should be compact when content is absent: `` `${hasContent ? "!h-[85vh]" : "!h-fit"}` ``.
+14. **IME / Input Method & keyboard input in xterm.js terminals**: Three rules to prevent swallowed keystrokes (Space, characters during fast typing, CJK composition):
     - **`attachCustomKeyEventHandler` must bail out during composition**: Always add `if (event.isComposing || event.keyCode === 229) return true;` as the very first check. Returning `true` hands the event to xterm's built-in `CompositionHelper`, which correctly manages the composition lifecycle. Without this, the custom handler can race with IME candidate selection (e.g. pressing Space to confirm a Chinese character) and swallow or duplicate input. VS Code's terminal does the same early-return.
     - **Never `preventDefault()` on keys that reach xterm's textarea**: React 18's event delegation registers a capture-phase listener on the root DOM node, which fires *before* xterm's own capture handler on its hidden `<textarea>`. If any ancestor React `onKeyDown` handler calls `e.preventDefault()` on Space or Enter, the browser will never insert the character into the textarea, breaking both direct input and IME paths (`_handleAnyTextareaChanges` checks the textarea value via `setTimeout(0)` — if the value didn't change, the character is lost). When adding `onKeyDown` to a wrapper around a terminal, always guard: `if (target.tagName === 'TEXTAREA' || target.closest('.xterm')) return;`
     - **Avoid per-keystroke overhead in `onData`**: Do not put `console.log()` or allocate objects (e.g. `new TextEncoder()`) inside the `onData` handler. In Tauri's WKWebView, `console.log` crosses the native bridge (~1–3 ms), and during fast typing (>10 chars/s) the accumulated latency pushes the JS event loop behind, causing dropped characters and IME desynchronisation. Hoist allocations outside the closure and remove hot-path logging.
@@ -265,7 +278,7 @@ VS Code-like resizable panel layout with presets:
 
 ### Internationalization (i18n)
 
-R-Shell is English-only. User-facing strings are centralized in `react-i18next` with a single locale file.
+skd is English-only. User-facing strings are centralized in `react-i18next` with a single locale file.
 
 - **Translation file**: `src/locales/en.json` (source of truth)
 - **i18n config**: `src/lib/i18n.ts` — English initialization and native macOS menu sync

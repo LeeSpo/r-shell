@@ -38,7 +38,7 @@
     "down": "Down"
   },
   "app": {
-    "title": "R-Shell",
+    "title": "skd",
     "connectionsRestored": "Connections Restored",
     "connectionsRestoredDesc": "{{restoredCount}} connection(s) restored, {{failedCount}} failed",
     "connectionsRestoredAllDesc": "Successfully restored {{restoredCount}} connection(s)",
@@ -145,7 +145,7 @@
       "title": "Security Note",
       "password": "For production environments, we recommend using public key authentication instead of passwords for enhanced security.",
       "anonymous": "Anonymous connections are not encrypted. Use FTPS for secure file transfers when possible.",
-      "publicKey": "Public key authentication is more secure than passwords. R-Shell supports RSA, Ed25519, and ECDSA keys."
+      "publicKey": "Public key authentication is more secure than passwords. skd supports RSA, Ed25519, and ECDSA keys."
     },
     "ftp": {
       "enableFtps": "Enable FTPS (FTP over TLS)",
@@ -555,7 +555,7 @@
     "checkForUpdates": "Check for Updates",
     "checking": "Checking for updates...",
     "upToDate": "You're up to date!",
-    "upToDateDesc": "R-Shell {{version}} is the latest version.",
+    "upToDateDesc": "skd {{version}} is the latest version.",
     "updateAvailable": "Update available",
     "updateAvailableDesc": "Version {{version}} is now available. You have {{currentVersion}}.",
     "downloading": "Downloading update...",

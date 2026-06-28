@@ -1565,7 +1565,7 @@ function AppContent() {
       />
 
       <div className="flex-1 flex overflow-hidden">
-        <ResizablePanelGroup direction="horizontal" autoSaveId="r-shell-main-layout">
+        <ResizablePanelGroup direction="horizontal" autoSaveId="skd-main-layout">
           {/* Left Sidebar - Connection Manager */}
           {layout.leftSidebarVisible && (
             <>
@@ -1725,7 +1725,7 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ErrorBoundary label="R-Shell">
+    <ErrorBoundary label="skd">
       <LayoutProvider>
         <TerminalGroupProvider>
           <AppContent />

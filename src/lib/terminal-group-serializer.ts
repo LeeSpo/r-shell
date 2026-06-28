@@ -1,9 +1,9 @@
 import type { TerminalGroupState, GridNode } from './terminal-group-types';
 
-export const STORAGE_KEY = 'r-shell-terminal-groups';
+export const STORAGE_KEY = 'skd-terminal-groups';
 export const STATE_VERSION = 1;
 
-const LEGACY_ACTIVE_CONNECTIONS_KEY = 'r-shell-active-connections';
+const LEGACY_ACTIVE_CONNECTIONS_KEY = 'skd-active-connections';
 
 interface SerializedState {
   version: number;

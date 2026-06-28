@@ -27,11 +27,11 @@ fn build_app_menu<F: Fn(&str) -> String>(
 ) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 
-    // ── r-shell (app) menu ────────────────────────────────────────────────────
+    // ── skd (app) menu ────────────────────────────────────────────────────────
     let app_menu = Submenu::with_id_and_items(
         app,
         "m_app",
-        "r-shell",
+        "skd",
         true,
         &[
             &PredefinedMenuItem::about(app, None, Some(AboutMetadata::default()))?,

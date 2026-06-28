@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# R-Shell Version Bump Script
+# skd Version Bump Script
 # Usage: ./scripts/bump-version.sh [major|minor|patch] [--no-commit]
 #
 # This script bumps the version across all project files:

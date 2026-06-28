@@ -19,7 +19,7 @@ export interface ConnectionProfile {
   tags?: string[]; // Optional tags for organization
 }
 
-const STORAGE_KEY = 'r-shell-connection-profiles';
+const STORAGE_KEY = 'skd-connection-profiles';
 
 export class ConnectionProfileManager {
   /**

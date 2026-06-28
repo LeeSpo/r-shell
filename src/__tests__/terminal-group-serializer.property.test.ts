@@ -155,19 +155,19 @@ describe('terminal-group-serializer property tests', () => {
             localStorage.clear();
 
             // Set legacy keys
-            localStorage.setItem('r-shell-active-connections', legacyActiveConnections);
+            localStorage.setItem('skd-active-connections', legacyActiveConnections);
             localStorage.setItem(STORAGE_KEY, legacyLayoutData);
 
             // Set ConnectionData key that should be preserved
-            localStorage.setItem('r-shell-connections', connectionData);
+            localStorage.setItem('skd-connections', connectionData);
 
             migrateFromLegacy();
 
             // Legacy active connections key should be cleared
-            expect(localStorage.getItem('r-shell-active-connections')).toBeNull();
+            expect(localStorage.getItem('skd-active-connections')).toBeNull();
 
             // ConnectionData should be preserved
-            expect(localStorage.getItem('r-shell-connections')).toBe(connectionData);
+            expect(localStorage.getItem('skd-connections')).toBe(connectionData);
           },
         ),
         { numRuns: 100 },

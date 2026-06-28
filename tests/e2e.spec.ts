@@ -5,7 +5,7 @@ const TEST_HOST = 'localhost'; // Replace with your test SSH server
 const TEST_USERNAME = 'testuser'; // Replace with your test username
 const TEST_PASSWORD = 'testpass'; // Replace with your test password
 
-test.describe('r-shell E2E Tests', () => {
+test.describe('skd E2E Tests', () => {
   test('should connect to SSH server and create connection', async ({ page }) => {
     // Navigate to the app
     await page.goto('http://localhost:1420');
