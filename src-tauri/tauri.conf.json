@@ -13,12 +13,9 @@
     "windows": [
       {
         "title": "skd",
-        "width": 1920,
-        "height": 1080,
-        "fullscreen": false,
-        "maximized": true,
-        "resizable": true,
-        "decorations": true,
+        "width": 1280,
+        "height": 800,
+        "visible": false,
         "titleBarStyle": "Overlay"
       }
     ],

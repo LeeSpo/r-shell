@@ -68,3 +68,6 @@ inherits = "release"
 opt-level = "z"        # Optimize for size
 lto = "fat"            # Aggressive LTO
 codegen-units = 1
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-window-state = "2"
