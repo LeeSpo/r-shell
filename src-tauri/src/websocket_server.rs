@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Mutex, Semaphore};
+use tokio::sync::mpsc;
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use tokio_util::sync::CancellationToken;
 
@@ -118,6 +118,12 @@ const OUTPUT_FLUSH_BYTES: usize = 16 * 1024;
 /// Maximum time (ms) between flushes — keeps latency low for slow output.
 const OUTPUT_FLUSH_INTERVAL_MS: u128 = 10;
 
+/// Faster flush for small interactive redraws (zsh line editor, autosuggestions).
+const OUTPUT_FLUSH_INTERVAL_INTERACTIVE_MS: u128 = 2;
+
+/// Buffers below this size are treated as interactive line-editor output.
+const INTERACTIVE_FLUSH_THRESHOLD: usize = 512;
+
 /// Timeout (ms) for sending JSON *control* messages.  Control messages are
 /// best-effort: if the channel is saturated we drop the ACK rather than block
 /// the message-dispatch loop.  Output frames use blocking sends instead.
@@ -131,12 +137,6 @@ const BINARY_OUTPUT_CMD: u8 = 0x01;
 // ---------------------------------------------------------------------------
 
 type WsTx = mpsc::Sender<Message>;
-/// Per-connection credit semaphore.  The PTY reader acquires 1 permit before
-/// each flush; the frontend grants 1 permit per processed frame via Resume.
-/// Starting with 0 permits guarantees the reader blocks until the frontend is
-/// ready, bounding the WKWebView message queue to INITIAL_WINDOW frames.
-type OutputCredits = Arc<Semaphore>;
-type OutputControls = Arc<Mutex<HashMap<String, OutputCredits>>>;
 
 #[derive(Debug, PartialEq, Eq)]
 enum SendOutcome {
@@ -223,6 +223,23 @@ fn should_remove_pty_state(active_gen: Option<u64>, closed_gen: Option<u64>) -> 
     }
 }
 
+fn output_flush_interval_ms(accumulated_len: usize) -> u128 {
+    if accumulated_len < INTERACTIVE_FLUSH_THRESHOLD {
+        OUTPUT_FLUSH_INTERVAL_INTERACTIVE_MS
+    } else {
+        OUTPUT_FLUSH_INTERVAL_MS
+    }
+}
+
+/// Whether accumulated PTY bytes should be sent now.
+/// Interactive chunks flush immediately — release builds read the local PTY
+/// faster than dev and would otherwise batch past the 2 ms window.
+fn should_flush_pty_output(accumulated_len: usize, elapsed_ms: u128) -> bool {
+    accumulated_len >= OUTPUT_FLUSH_BYTES
+        || accumulated_len < INTERACTIVE_FLUSH_THRESHOLD
+        || elapsed_ms >= output_flush_interval_ms(accumulated_len)
+}
+
 impl WebSocketServer {
     pub fn new(connection_manager: Arc<ConnectionManager>) -> Self {
         Self { connection_manager }
@@ -282,7 +299,6 @@ impl WebSocketServer {
         // Bounded channel: when full the PTY reader blocks, providing backpressure
         // all the way back to the SSH channel and the remote process.
         let (tx, mut rx) = mpsc::channel::<Message>(WS_OUTPUT_QUEUE_CAPACITY);
-        let output_controls: OutputControls = Arc::new(Mutex::new(HashMap::new()));
         let mut active_pty_generations: HashMap<String, u64> = HashMap::new();
 
         // Forward messages from the bounded channel to the WebSocket.
@@ -336,10 +352,7 @@ impl WebSocketServer {
                             continue;
                         }
                     };
-                    match self
-                        .handle_message(ws_msg, tx.clone(), output_controls.clone())
-                        .await
-                    {
+                    match self.handle_message(ws_msg, tx.clone()).await {
                         Ok(PtyLifecycleEvent::Started { connection_id, generation }) => {
                             active_pty_generations.insert(connection_id, generation);
                         }
@@ -349,7 +362,6 @@ impl WebSocketServer {
                                 generation,
                             ) {
                                 active_pty_generations.remove(&connection_id);
-                                output_controls.lock().await.remove(&connection_id);
                             }
                         }
                         Ok(PtyLifecycleEvent::None) => {}
@@ -388,19 +400,13 @@ impl WebSocketServer {
                 );
             }
         }
-        output_controls.lock().await.clear();
         ws_sender_task.abort();
 
         Ok(())
     }
 
     /// Handle a WebSocket message
-    async fn handle_message(
-        &self,
-        msg: WsMessage,
-        tx: WsTx,
-        output_controls: OutputControls,
-    ) -> Result<PtyLifecycleEvent> {
+    async fn handle_message(&self, msg: WsMessage, tx: WsTx) -> Result<PtyLifecycleEvent> {
         match msg {
             WsMessage::StartPty {
                 connection_id,
@@ -426,12 +432,6 @@ impl WebSocketServer {
                     .ok_or_else(|| {
                         anyhow::anyhow!("PTY session disappeared immediately after creation")
                     })?;
-
-                // Credit semaphore: 0 initial permits.  The PTY reader acquires
-                // 1 permit before each flush; the frontend grants permits via
-                // Resume messages (1 per frame processed by xterm).
-                let credits: OutputCredits = Arc::new(Semaphore::new(0));
-                output_controls.lock().await.insert(connection_id.clone(), Arc::clone(&credits));
 
                 let response = WsMessage::Success {
                     message: format!("PTY connection started: {}", connection_id),
@@ -480,18 +480,11 @@ impl WebSocketServer {
                             Ok(data) if data.is_empty() => {
                                 // 1 ms poll returned nothing — flush if interval elapsed.
                                 if !accumulated.is_empty()
-                                    && last_flush.elapsed().as_millis()
-                                        >= OUTPUT_FLUSH_INTERVAL_MS
+                                    && should_flush_pty_output(
+                                        accumulated.len(),
+                                        last_flush.elapsed().as_millis(),
+                                    )
                                 {
-                                    // Wait for 1 frontend ACK before sending.
-                                    let ok = tokio::select! {
-                                        biased;
-                                        _ = cancel_token.cancelled() => false,
-                                        r = credits.acquire() => r.map(|p| { p.forget(); true }).unwrap_or(false),
-                                    };
-                                    if !ok {
-                                        break;
-                                    }
                                     if flush_output(
                                         &tx_clone,
                                         &connection_id_clone,
@@ -508,19 +501,10 @@ impl WebSocketServer {
                             }
                             Ok(data) => {
                                 accumulated.extend_from_slice(&data);
-                                if accumulated.len() >= OUTPUT_FLUSH_BYTES
-                                    || last_flush.elapsed().as_millis()
-                                        >= OUTPUT_FLUSH_INTERVAL_MS
-                                {
-                                    // Wait for 1 frontend ACK before sending.
-                                    let ok = tokio::select! {
-                                        biased;
-                                        _ = cancel_token.cancelled() => false,
-                                        r = credits.acquire() => r.map(|p| { p.forget(); true }).unwrap_or(false),
-                                    };
-                                    if !ok {
-                                        break;
-                                    }
+                                if should_flush_pty_output(
+                                    accumulated.len(),
+                                    last_flush.elapsed().as_millis(),
+                                ) {
                                     if flush_output(
                                         &tx_clone,
                                         &connection_id_clone,
@@ -588,20 +572,17 @@ impl WebSocketServer {
                 Ok(PtyLifecycleEvent::None)
             }
             WsMessage::Pause { connection_id } => {
-                // With credit-based flow control the frontend no longer sends
-                // Pause — when credits run out the PTY reader blocks naturally.
-                // This handler is kept for protocol compatibility.
                 tracing::debug!(
-                    "Pause received for connection: {} (no-op with credit flow control)",
+                    "Pause received for connection: {} (no-op; backpressure via bounded channel)",
                     connection_id
                 );
                 Ok(PtyLifecycleEvent::None)
             }
             WsMessage::Resume { connection_id } => {
-                tracing::debug!("Credit granted for connection: {}", connection_id);
-                if let Some(credits) = output_controls.lock().await.get(&connection_id) {
-                    credits.add_permits(1);
-                }
+                tracing::debug!(
+                    "Resume received for connection: {} (no-op; backpressure via bounded channel)",
+                    connection_id
+                );
                 Ok(PtyLifecycleEvent::None)
             }
             WsMessage::Close {
@@ -746,5 +727,30 @@ impl WebSocketServer {
                 Ok(PtyLifecycleEvent::None)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_flush_pty_output_immediately_for_interactive_chunks() {
+        assert!(should_flush_pty_output(64, 0));
+        assert!(should_flush_pty_output(INTERACTIVE_FLUSH_THRESHOLD - 1, 0));
+    }
+
+    #[test]
+    fn should_flush_pty_output_waits_for_interval_on_medium_chunks() {
+        assert!(!should_flush_pty_output(INTERACTIVE_FLUSH_THRESHOLD, 0));
+        assert!(should_flush_pty_output(
+            INTERACTIVE_FLUSH_THRESHOLD,
+            OUTPUT_FLUSH_INTERVAL_MS,
+        ));
+    }
+
+    #[test]
+    fn should_flush_pty_output_on_size_cap() {
+        assert!(should_flush_pty_output(OUTPUT_FLUSH_BYTES, 0));
     }
 }

@@ -335,7 +335,7 @@ export const defaultTerminalOptions: ITerminalOptions = {
   letterSpacing: 0,
   theme: defaultTerminalTheme,
   allowProposedApi: true,
-  convertEol: true,
+  convertEol: false,
   scrollback: DEFAULT_TERMINAL_SCROLLBACK,
   tabStopWidth: 8,
   allowTransparency: false,

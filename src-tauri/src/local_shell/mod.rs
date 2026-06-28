@@ -51,6 +51,38 @@ pub fn create_local_pty_session(cols: u32, rows: u32) -> Result<PtySession> {
     if std::env::var("PATH").is_err() {
         cmd.env("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
     }
+
+    // CRITICAL: GUI apps launched from Finder / Dock / Spotlight inherit a
+    // minimal environment from launchd that does NOT include LANG or LC_*.
+    // Without a UTF-8 locale, zsh's line editor (ZLE) treats multi-byte
+    // characters (e.g. the ❯ in many prompts) as N separate 1-wide characters
+    // instead of 1 character.  The resulting cursor-position mismatch causes
+    // zsh-autosuggestions to write suggestion text at wrong offsets, producing
+    // duplicated/swallowed characters (e.g. `cdcd …`, `grok` → `ok`).
+    //
+    // When launched from a terminal (`pnpm tauri dev`), LANG is inherited and
+    // everything works — this bug only manifests in production app bundles.
+    if std::env::var("LANG").is_err() {
+        let posix_locale = sys_locale::get_locale()
+            .map(|l| {
+                // sys-locale returns BCP-47 (e.g. "zh-CN"); convert to POSIX
+                let base = l.replace('-', "_");
+                if base.contains('.') {
+                    base
+                } else {
+                    format!("{}.UTF-8", base)
+                }
+            })
+            .unwrap_or_else(|| "en_US.UTF-8".to_string());
+        cmd.env("LANG", &posix_locale);
+    }
+    // Safety net: even if LANG is set but LC_CTYPE is not, ensure character
+    // width calculations use UTF-8.  macOS natively supports the bare
+    // "UTF-8" value for LC_CTYPE (Terminal.app uses the same convention).
+    if std::env::var("LC_CTYPE").is_err() {
+        cmd.env("LC_CTYPE", "UTF-8");
+    }
+
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
 
@@ -95,16 +127,32 @@ pub fn create_local_pty_session(cols: u32, rows: u32) -> Result<PtySession> {
     });
 
     // Output: local PTY → frontend
-    let master_read = master.clone();
+    //
+    // IMPORTANT: Obtain the reader *once* before entering the loop.
+    // Previously `try_clone_reader()` was called on every iteration, which:
+    //   1. Created and destroyed a dup()'d FD per read — the dup/close churn
+    //      could fragment zsh escape sequences (especially autosuggestion
+    //      redraws) across reads, confusing xterm.js's parser.
+    //   2. Required holding the master Mutex during the blocking `read()`,
+    //      which prevented `resize()` from executing until the next read
+    //      returned. Stale dimensions caused zsh to miscalculate cursor
+    //      positions for autosuggestion text.
+    let reader = {
+        let m = master
+            .lock()
+            .map_err(|e| anyhow::anyhow!("PTY lock poisoned: {}", e))?;
+        m.try_clone_reader().map_err(|e| anyhow::anyhow!("{}", e))?
+    };
+    let reader = Arc::new(std::sync::Mutex::new(reader));
+
     let cancel_read = cancel.clone();
     tokio::spawn(async move {
         while !cancel_read.is_cancelled() {
-            let master_read = master_read.clone();
+            let reader = reader.clone();
             let read_result = tokio::task::spawn_blocking(move || {
-                let master = master_read
+                let mut reader = reader
                     .lock()
                     .map_err(|e| std::io::Error::other(e.to_string()))?;
-                let mut reader = master.try_clone_reader().map_err(std::io::Error::other)?;
                 let mut buf = vec![0u8; 4096];
                 match reader.read(&mut buf) {
                     Ok(0) => Ok(None),

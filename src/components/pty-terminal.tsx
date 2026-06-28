@@ -297,15 +297,9 @@ export function PtyTerminal({
       return true;
     });
 
-    // Welcome message
-    term.writeln('\x1b[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
-    term.writeln(`\x1b[1;36m  ${connectionName}\x1b[0m`);
-    term.writeln(`\x1b[90m  ${username}@${host}\x1b[0m`);
-    term.writeln(`\x1b[90m  Renderer: ${rendererRef.current.toUpperCase()}\x1b[0m`);
-    term.writeln('\x1b[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
-    term.write('\r\n');
-    term.writeln('\x1b[33m🚀 Starting interactive shell (WebSocket + PTY mode)...\x1b[0m');
-    term.write('\r\n');
+    // Do NOT write welcome/status text into xterm — it desynchronises the
+    // emulator cursor from the PTY (zsh ZLE / autosuggestions assume a clean
+    // buffer). Connection status is surfaced via tab chrome + toasts instead.
 
     let isRunning = true;
     // Tracks whether a PTY session has been successfully established in this
@@ -316,11 +310,11 @@ export function PtyTerminal({
     // warn the user that a fresh shell was started.
     let isReconnectAfterDrop = false;
 
-    // RAF write batching state — lifted to effect scope so cleanup can cancel.
-    let writeBuffer = '';
-    let watermark = 0;
-    let rafId: number | null = null;
-    let creditsGranted = 0;
+    // Serial PTY output queue — each chunk is written only after the previous
+    // one is fully parsed by xterm (per xterm.js flowcontrol guide).
+    let ptyOutputQueue: string[] = [];
+    let ptyWritePending = false;
+    let ptyOutputStarted = false;
     
     // CRITICAL: Wait for terminal to have proper dimensions before connecting
     // Hidden terminals (display: none) may have cols=10, rows=5 which breaks PTY
@@ -389,8 +383,7 @@ export function PtyTerminal({
 
       ws.onopen = () => {
         console.log(`[PTY Terminal] [${connectionId}] WebSocket connected`);
-        term.writeln('\x1b[32m✓ WebSocket connected\x1b[0m');
-        
+
         // Start PTY session
         const startMsg = {
           type: 'StartPty',
@@ -402,92 +395,40 @@ export function PtyTerminal({
         ws.send(JSON.stringify(startMsg));
       };
 
-      // =========================================================================
-      // RAF-Based Write Batching + Watermark Flow Control
-      //
-      // Based on xterm.js best practices:
-      // - http://xtermjs.org/docs/guides/flowcontrol/
-      // - https://github.com/github/copilot-cli/issues/1805 (4-layer solution)
-      //
-      // Problem: calling term.write() for every WebSocket frame creates hundreds
-      // of write operations per second, each with its own callback. This
-      // overwhelms xterm's internal write buffer (hardcoded 50 MB limit) and
-      // creates massive GC pressure from per-chunk closures.
-      //
-      // Solution:
-      // 1. Accumulate all incoming frames in a string buffer.
-      // 2. Flush once per requestAnimationFrame (~60 writes/s instead of 100+).
-      // 3. Use watermark-based flow control: send Resume credits only when the
-      //    pending byte count drops below LOW_WATER, avoiding per-frame ACKs.
-      // =========================================================================
+      const pumpPtyOutput = () => {
+        if (ptyWritePending || ptyOutputQueue.length === 0) return;
 
-      /** High watermark (bytes): above this, the buffer is considered "full" and
-       *  we stop granting credits until xterm drains below LOW_WATER.  128 KB
-       *  keeps the emulator snappy for keystrokes under fast input (xterm guide
-       *  recommends ≤ 500 KB for responsiveness). */
-      const HIGH_WATER = 128 * 1024;
-      /** Low watermark (bytes): below this, we grant a batch of credits to the
-       *  backend so it can send more data. */
-      const LOW_WATER = 16 * 1024;
-      /** How many credits to grant each time watermark drops below LOW_WATER.
-       *  Keeps the pipeline flowing without flooding the WS receive queue. */
-      const CREDIT_BATCH = 4;
+        const data = ptyOutputQueue.shift();
+        if (!data) return;
 
-      const grantCredits = (count: number) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          // Send a single Resume per credit (backend Semaphore.add_permits(1))
-          const msg = JSON.stringify({ type: 'Resume', connection_id: connectionId });
-          for (let i = 0; i < count; i++) {
-            ws.send(msg);
-          }
-          creditsGranted += count;
-        }
-      };
+        ptyWritePending = true;
 
-      const flushWriteBuffer = () => {
-        rafId = null;
-        if (!writeBuffer) return;
-
-        const data = writeBuffer;
-        writeBuffer = '';
-
-        // Enforce per-session memory cap so xterm's scrollback buffer can't
-        // grow without bound on sustained high-throughput output (e.g. `yes`).
         sessionOutputRef.current += data.length;
         if (sessionOutputRef.current >= SESSION_OUTPUT_LIMIT_BYTES) {
           term.reset();
           term.clear();
           sessionOutputRef.current = 0;
+          ptyOutputStarted = false;
           term.writeln('\x1b[33m[Output limit reached \u2014 scrollback cleared to free memory]\x1b[0m');
         }
 
-        // Single write per animation frame — the key optimisation.
-        // Reduces term.write() calls from hundreds/s to ~60/s.
         term.write(data, () => {
-          // xterm finished processing this batch — update watermark
-          watermark = Math.max(watermark - data.length, 0);
-
-          // Watermark-based flow control: grant credits only when the
-          // pending buffer has drained below LOW_WATER.  Skip granting
-          // if watermark is still above HIGH_WATER (buffer still full).
-          if (watermark < LOW_WATER && watermark < HIGH_WATER && creditsGranted < CREDIT_BATCH * 2) {
-            grantCredits(CREDIT_BATCH);
-            creditsGranted = 0; // reset counter after granting
-          }
+          ptyWritePending = false;
+          pumpPtyOutput();
         });
-
-        // If more data arrived during the write, schedule another flush
-        if (writeBuffer) {
-          rafId = requestAnimationFrame(flushWriteBuffer);
-        }
       };
 
-      const enqueueOutput = (text: string) => {
-        writeBuffer += text;
-        watermark += text.length;
-        if (rafId === null) {
-          rafId = requestAnimationFrame(flushWriteBuffer);
+      const writePtyOutput = (text: string) => {
+        if (!ptyOutputStarted) {
+          ptyOutputStarted = true;
+          term.clear();
+          sessionOutputRef.current = 0;
+          ptyOutputQueue = [];
+          ptyWritePending = false;
         }
+
+        ptyOutputQueue.push(text);
+        pumpPtyOutput();
       };
 
       ws.onmessage = (event) => {
@@ -503,7 +444,7 @@ export function PtyTerminal({
           if (frameConnectionId !== connectionId) return;
           const payload = data.subarray(payloadOffset);
           if (payload.length === 0) return;
-          enqueueOutput(outputDecoder.decode(payload, { stream: true }));
+          writePtyOutput(outputDecoder.decode(payload, { stream: true }));
           return;
         }
 
@@ -515,17 +456,12 @@ export function PtyTerminal({
               console.log(`[PTY Terminal] [${connectionId}]`, msg.message);
               if (msg.message.includes('PTY connection started')) {
                 reconnectAttemptsRef.current = 0;
-                autoReconnectAfterDropRef.current = 0; // Reset drop-reconnect counter on success
+                autoReconnectAfterDropRef.current = 0;
                 if (hasEverConnected || isReconnectAfterDrop) {
-                  // Reconnected after a drop — warn that a fresh shell was started
-                  term.writeln('\x1b[33m⚠ Previous session lost. New shell session started.\x1b[0m');
-                } else {
-                  term.writeln('\x1b[32m✓ PTY connection started\x1b[0m');
-                  term.writeln('\x1b[90mYou can now use interactive commands: vim, less, more, top, etc.\x1b[0m');
+                  toast.warning(t('ptyTerminal.reconnectingTerminal'));
                 }
                 hasEverConnected = true;
                 isReconnectAfterDrop = false;
-                term.write('\r\n');
                 if (connectionStatusRef.current !== 'connected') {
                   connectionStatusRef.current = 'connected';
                   onConnectionStatusChange?.(connectionId, 'connected');
@@ -538,19 +474,13 @@ export function PtyTerminal({
                 ptyGenerationRef.current = msg.generation;
                 console.log(`[PTY Terminal] [${connectionId}] PTY generation: ${msg.generation}`);
                 signalReady(connectionId);
-                // Credit-based flow control: seed the pipeline with initial
-                // credits so the PTY reader can start sending immediately.
-                // Ongoing credits are managed by the watermark-based flow
-                // control in the flush callback above.
-                const INITIAL_WINDOW = 2;
-                grantCredits(INITIAL_WINDOW);
               }
               break;
             }
               
             case 'Output':
               if (msg.data && msg.data.length > 0) {
-                enqueueOutput(new TextDecoder().decode(new Uint8Array(msg.data)));
+                writePtyOutput(new TextDecoder().decode(new Uint8Array(msg.data)));
               }
               break;
               
@@ -756,14 +686,9 @@ export function PtyTerminal({
       console.log(`[PTY Terminal] [${connectionId}] Cleaning up`);
       isRunning = false;
 
-      // Cancel any pending RAF write batch and discard queued data so no
-      // stale writes reach a terminal that is about to be disposed.
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-      writeBuffer = '';
-      watermark = 0;
+      // Discard queued PTY output so stale writes never reach a disposed terminal.
+      ptyOutputQueue = [];
+      ptyWritePending = false;
 
       // Close PTY connection via WebSocket — include generation so the
       // backend can ignore this close if a newer session already exists.
@@ -783,7 +708,7 @@ export function PtyTerminal({
 
       // CRITICAL: Null out WebSocket handlers to break closure reference chains.
       // The onmessage/onclose/onerror handlers capture `term`, `outputDecoder`,
-      // and `enqueueOutput` via closures. Without nulling them out, V8 cannot GC
+      // and `writePtyOutput` via closures. Without nulling them out, V8 cannot GC
       // these objects even after term.dispose(), causing ~1 GB of retained heap.
       if (ws) {
         ws.onmessage = null;
