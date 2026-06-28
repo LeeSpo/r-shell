@@ -1,16 +1,12 @@
-use crate::desktop_protocol::{DesktopConnectRequest, DesktopProtocol, FrameUpdate};
 use crate::ftp_client::FtpClient;
 use crate::os_detect::OsInfoCache;
-use crate::rdp_client::RdpClient;
 use crate::sftp_client::StandaloneSftpClient;
 use crate::local_shell;
 use crate::pty_session::PtySession;
 use crate::ssh::{SshClient, SshConfig};
-use crate::vnc_client::VncClient;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
@@ -25,9 +21,7 @@ pub struct ConnectionManager {
     sftp_connections: Arc<RwLock<HashMap<String, StandaloneSftpClient>>>,
     /// FTP/FTPS connections
     ftp_connections: Arc<RwLock<HashMap<String, FtpClient>>>,
-    /// Remote desktop (RDP/VNC) connections
-    desktop_connections: Arc<RwLock<HashMap<String, Arc<RwLock<Box<dyn DesktopProtocol>>>>>>,
-    /// Track protocol type per connection ID ("SSH", "SFTP", "FTP", "RDP", "VNC")
+    /// Track protocol type per connection ID ("SSH", "SFTP", "FTP")
     connection_types: Arc<RwLock<HashMap<String, String>>>,
     /// Cached OS info per SSH connection (auto-detected on first monitoring call)
     os_info_cache: OsInfoCache,
@@ -42,7 +36,6 @@ impl ConnectionManager {
             pending_connections: Arc::new(RwLock::new(HashMap::new())),
             sftp_connections: Arc::new(RwLock::new(HashMap::new())),
             ftp_connections: Arc::new(RwLock::new(HashMap::new())),
-            desktop_connections: Arc::new(RwLock::new(HashMap::new())),
             connection_types: Arc::new(RwLock::new(HashMap::new())),
             os_info_cache: OsInfoCache::new(),
         }
@@ -370,74 +363,6 @@ impl ConnectionManager {
     pub async fn get_connection_type(&self, connection_id: &str) -> Option<String> {
         let types = self.connection_types.read().await;
         types.get(connection_id).cloned()
-    }
-
-    // ===== Desktop (RDP/VNC) Connection Management =====
-
-    /// Create a desktop connection (RDP or VNC) based on the request.
-    pub async fn create_desktop_connection(
-        &self,
-        connection_id: String,
-        request: &DesktopConnectRequest,
-    ) -> Result<(u16, u16)> {
-        let protocol = request.protocol.to_uppercase();
-        let client: Box<dyn DesktopProtocol> = match protocol.as_str() {
-            "RDP" => {
-                let config = request.to_rdp_config();
-                Box::new(RdpClient::connect(&config).await?)
-            }
-            "VNC" => {
-                let config = request.to_vnc_config();
-                Box::new(VncClient::connect(&config).await?)
-            }
-            _ => return Err(anyhow::anyhow!("Unknown desktop protocol: {}", protocol)),
-        };
-
-        let (w, h) = client.desktop_size();
-
-        let mut desktop = self.desktop_connections.write().await;
-        desktop.insert(connection_id.clone(), Arc::new(RwLock::new(client)));
-
-        let mut types = self.connection_types.write().await;
-        types.insert(connection_id, protocol);
-
-        Ok((w, h))
-    }
-
-    /// Get a desktop connection by ID.
-    pub async fn get_desktop_connection(
-        &self,
-        connection_id: &str,
-    ) -> Option<Arc<RwLock<Box<dyn DesktopProtocol>>>> {
-        let desktop = self.desktop_connections.read().await;
-        desktop.get(connection_id).cloned()
-    }
-
-    /// Close and remove a desktop connection.
-    pub async fn close_desktop_connection(&self, connection_id: &str) -> Result<()> {
-        let mut desktop = self.desktop_connections.write().await;
-        if let Some(client) = desktop.remove(connection_id) {
-            let mut client = client.write().await;
-            client.disconnect().await?;
-        }
-        let mut types = self.connection_types.write().await;
-        types.remove(connection_id);
-        Ok(())
-    }
-
-    /// Start the frame update loop for a desktop connection.
-    pub async fn start_desktop_stream(
-        &self,
-        connection_id: &str,
-        frame_tx: mpsc::UnboundedSender<FrameUpdate>,
-        cancel: CancellationToken,
-    ) -> Result<()> {
-        let desktop = self.desktop_connections.read().await;
-        let client = desktop
-            .get(connection_id)
-            .ok_or_else(|| anyhow::anyhow!("Desktop connection not found: {}", connection_id))?;
-        let client = client.read().await;
-        client.start_frame_loop(frame_tx, cancel).await
     }
 }
 

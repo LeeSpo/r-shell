@@ -121,10 +121,7 @@
       "proxyUsername": "Proxy Username",
       "proxyPassword": "Proxy Password",
       "keepAliveInterval": "Interval (seconds)",
-      "maxCount": "Max Count",
-      "domain": "Domain (optional)",
-      "displayResolution": "Display Resolution",
-      "colorDepth": "Color Depth"
+      "maxCount": "Max Count"
     },
     "placeholder": {
       "connectionName": "My Server",
@@ -137,19 +134,13 @@
       "proxyHost": "proxy.example.com",
       "proxyPort": "Proxy Port",
       "proxyUsername": "Optional",
-      "proxyPassword": "Optional",
-      "domain": "WORKGROUP"
+      "proxyPassword": "Optional"
     },
     "authMethod": {
       "password": "Password",
       "publicKey": "Public Key",
       "keyboardInteractive": "Keyboard Interactive",
       "anonymous": "Anonymous"
-    },
-    "desktopInfo": {
-      "title": "Remote Desktop",
-      "rdp": "RDP connects to Windows Remote Desktop. Requires NLA-compatible credentials.",
-      "vnc": "VNC connects to any host running a VNC server. Uses password-only authentication."
     },
     "securityNote": {
       "title": "Security Note",
@@ -166,17 +157,6 @@
       "enableCompressionDesc": "Compress data to improve performance over slow connections",
       "keepAlive": "Keep Alive",
       "keepAliveDesc": "Send keep-alive messages to prevent connection timeout"
-    },
-    "rdp": {
-      "fitToWindow": "Fit to Window",
-      "h1024x768": "1024×768",
-      "h1280x720": "1280×720 (HD)",
-      "h1920x1080": "1920×1080 (Full HD)"
-    },
-    "vnc": {
-      "trueColor": "True Color (24-bit)",
-      "highColor": "High Color (16-bit)",
-      "colors256": "256 Colors (8-bit)"
     },
     "proxy": {
       "noProxy": "No Proxy",
@@ -905,16 +885,6 @@
     "pending": "Pending",
     "lastConnected": "Last Connected"
   },
-  "desktopToolbar": {
-    "switchTo11": "Switch to 1:1",
-    "switchToFit": "Switch to Fit to Window",
-    "fit": "Fit",
-    "oneToOne": "1:1",
-    "sendCtrlAltDel": "Send Ctrl+Alt+Del",
-    "exitFullScreen": "Exit Full Screen",
-    "fullScreen": "Full Screen",
-    "disconnect": "Disconnect"
-  },
   "sidebar": {
     "toggleSidebar": "Toggle Sidebar",
     "sidebar": "Sidebar",
@@ -1073,14 +1043,5 @@
     "downloading": "Downloading…",
     "openedWithOs": "{{fileName}} opened with local application",
     "failedToOpenWithOs": "Failed to open file with local application"
-  },
-  "desktopViewer": {
-    "clipboardAccessDenied": "Clipboard access denied",
-    "clipboardAccessDeniedDesc": "Allow clipboard permissions to paste into the remote desktop.",
-    "failedToEnterFullScreen": "Failed to enter full screen",
-    "failedToDisconnect": "Failed to disconnect",
-    "desktopDisconnected": "Desktop Disconnected",
-    "reconnect": "Reconnect",
-    "connectingTo": "Connecting to {{name}}..."
   }
 }

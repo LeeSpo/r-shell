@@ -44,13 +44,6 @@ pub enum AuthMethod {
     },
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct SshSession {
-    pub id: String,
-    pub config: SshConfig,
-    pub connected: bool,
-}
-
 pub struct SshClient {
     session: Option<Arc<client::Handle<Client>>>,
 }

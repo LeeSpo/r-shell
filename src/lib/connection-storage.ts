@@ -25,12 +25,6 @@ export interface ConnectionData {
   passphrase?: string;
   // FTP-specific
   ftpsEnabled?: boolean;
-  // RDP-specific
-  domain?: string;
-  rdpResolution?: string;
-  // VNC-specific
-  vncColorDepth?: string;
-  vncPassword?: string;
 }
 
 export interface ConnectionFolder {
@@ -533,7 +527,7 @@ export interface ActiveConnectionState {
   connectionId: string;
   order: number;
   originalConnectionId?: string; // For duplicated tabs, reference to the original connection
-  tabType?: 'terminal' | 'file-browser' | 'desktop' | 'editor'; // Tab type for SFTP/FTP, RDP/VNC, SSH, or remote file editing
+  tabType?: 'terminal' | 'file-browser' | 'editor'; // Tab type for SFTP/FTP, SSH, or remote file editing
   protocol?: string; // Protocol used (SSH, SFTP, FTP)
 }
 

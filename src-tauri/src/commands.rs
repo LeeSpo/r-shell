@@ -3,7 +3,6 @@ use crate::ftp_client::FtpConfig;
 use crate::os_detect::{self, OsInfo};
 use crate::sftp_client::{FileEntry, FileEntryType, SftpAuthMethod, SftpConfig};
 use crate::ssh::{AuthMethod, SshConfig};
-use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -820,13 +819,6 @@ pub async fn list_connections(
     Ok(state.list_connections().await)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TailLogRequest {
-    pub connection_id: String,
-    pub log_path: String,
-    pub lines: Option<u32>, // Number of lines to show (default 50)
-}
-
 #[tauri::command]
 pub async fn tail_log(
     connection_id: String,
@@ -1519,13 +1511,6 @@ pub async fn get_disk_usage(
             error: Some(e.to_string()),
         }),
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TabCompletionRequest {
-    pub connection_id: String,
-    pub input: String,
-    pub cursor_position: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -3072,126 +3057,6 @@ fn matches_exclude(name: &str, patterns: &[String]) -> bool {
         }
     }
     false
-}
-
-// ========== Desktop (RDP/VNC) Commands ==========
-
-/// Connect to a remote desktop via RDP or VNC
-#[tauri::command]
-pub async fn desktop_connect(
-    connection_id: String,
-    request: crate::desktop_protocol::DesktopConnectRequest,
-    state: State<'_, Arc<ConnectionManager>>,
-) -> Result<crate::desktop_protocol::DesktopConnectResponse, String> {
-    tracing::info!(
-        "Desktop connect: {} ({}) to {}:{}",
-        connection_id,
-        request.protocol,
-        request.host,
-        request.port
-    );
-
-    let (width, height) = state
-        .create_desktop_connection(connection_id, &request)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(crate::desktop_protocol::DesktopConnectResponse { width, height })
-}
-
-/// Disconnect a remote desktop session
-#[tauri::command]
-pub async fn desktop_disconnect(
-    connection_id: String,
-    state: State<'_, Arc<ConnectionManager>>,
-) -> Result<(), String> {
-    tracing::info!("Desktop disconnect: {}", connection_id);
-    state
-        .close_desktop_connection(&connection_id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Send a keyboard event to a remote desktop session
-#[tauri::command]
-pub async fn desktop_send_key(
-    connection_id: String,
-    key_code: u32,
-    down: bool,
-    state: State<'_, Arc<ConnectionManager>>,
-) -> Result<(), String> {
-    let client = state
-        .get_desktop_connection(&connection_id)
-        .await
-        .ok_or_else(|| format!("Desktop connection not found: {}", connection_id))?;
-    let c = client.read().await;
-    c.send_key(key_code, down).await.map_err(|e| e.to_string())
-}
-
-/// Send a mouse/pointer event to a remote desktop session
-#[tauri::command]
-pub async fn desktop_send_pointer(
-    connection_id: String,
-    x: u16,
-    y: u16,
-    button_mask: u8,
-    state: State<'_, Arc<ConnectionManager>>,
-) -> Result<(), String> {
-    let client = state
-        .get_desktop_connection(&connection_id)
-        .await
-        .ok_or_else(|| format!("Desktop connection not found: {}", connection_id))?;
-    let c = client.read().await;
-    c.send_pointer(x, y, button_mask)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Request a full framebuffer update from a remote desktop session
-#[tauri::command]
-pub async fn desktop_request_frame(
-    connection_id: String,
-    state: State<'_, Arc<ConnectionManager>>,
-) -> Result<(), String> {
-    let client = state
-        .get_desktop_connection(&connection_id)
-        .await
-        .ok_or_else(|| format!("Desktop connection not found: {}", connection_id))?;
-    let c = client.read().await;
-    c.request_full_frame().await.map_err(|e| e.to_string())
-}
-
-/// Send clipboard text to a remote desktop session
-#[tauri::command]
-pub async fn desktop_set_clipboard(
-    connection_id: String,
-    text: String,
-    state: State<'_, Arc<ConnectionManager>>,
-) -> Result<(), String> {
-    let client = state
-        .get_desktop_connection(&connection_id)
-        .await
-        .ok_or_else(|| format!("Desktop connection not found: {}", connection_id))?;
-    let c = client.read().await;
-    c.set_clipboard(text).await.map_err(|e| e.to_string())
-}
-
-/// Request a remote desktop session to resize to the given dimensions.
-/// For RDP: sends a display resize request to the remote server.
-/// For VNC: no-op (client-side scaling is used instead).
-#[tauri::command]
-pub async fn desktop_resize(
-    connection_id: String,
-    width: u16,
-    height: u16,
-    state: State<'_, Arc<ConnectionManager>>,
-) -> Result<(), String> {
-    let client = state
-        .get_desktop_connection(&connection_id)
-        .await
-        .ok_or_else(|| format!("Desktop connection not found: {}", connection_id))?;
-    let mut c = client.write().await;
-    c.resize(width, height).await.map_err(|e| e.to_string())
 }
 
 // ========== Native Menu i18n ==========

@@ -19,7 +19,7 @@ import {
 const arbitraryTerminalTab: fc.Arbitrary<TerminalTab> = fc.record({
   id: fc.uuid(),
   name: fc.string({ minLength: 1, maxLength: 20 }),
-  protocol: fc.constantFrom('SSH', 'Telnet', 'Serial', undefined),
+  protocol: fc.constantFrom('SSH', 'SFTP', 'FTP', undefined),
   host: fc.option(fc.ipV4(), { nil: undefined }),
   username: fc.option(fc.string({ minLength: 1, maxLength: 10 }), { nil: undefined }),
   originalConnectionId: fc.option(fc.uuid(), { nil: undefined }),

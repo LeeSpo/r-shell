@@ -12,7 +12,7 @@ import {
   type SshSpecificField,
 } from '../lib/protocol-config';
 
-const ALL_PROTOCOLS: Protocol[] = ['SSH', 'SFTP', 'FTP', 'Telnet', 'Raw', 'Serial'];
+const ALL_PROTOCOLS: Protocol[] = ['SSH', 'SFTP', 'FTP'];
 
 const arbitraryProtocol: fc.Arbitrary<Protocol> = fc.constantFrom(...ALL_PROTOCOLS);
 
@@ -38,15 +38,6 @@ describe('protocol-config property tests', () => {
       expect(getDefaultPort('FTP')).toBe(21);
     });
 
-    it('Telnet defaults to port 23', () => {
-      expect(getDefaultPort('Telnet')).toBe(23);
-    });
-
-    it('Raw and Serial default to 0', () => {
-      expect(getDefaultPort('Raw')).toBe(0);
-      expect(getDefaultPort('Serial')).toBe(0);
-    });
-
     it('is deterministic — calling twice gives the same result', () => {
       fc.assert(
         fc.property(arbitraryProtocol, (protocol) => {
@@ -58,15 +49,12 @@ describe('protocol-config property tests', () => {
 
   // Property 2: Protocol auth methods mapping
   describe('Property 2 — getAuthMethods', () => {
-    it('always returns a non-empty array for SSH, SFTP, FTP, Telnet', () => {
+    it('always returns a non-empty array for SSH, SFTP, FTP', () => {
       fc.assert(
-        fc.property(
-          fc.constantFrom<Protocol>('SSH', 'SFTP', 'FTP', 'Telnet'),
-          (protocol) => {
-            const methods = getAuthMethods(protocol);
-            expect(methods.length).toBeGreaterThan(0);
-          },
-        ),
+        fc.property(arbitraryProtocol, (protocol) => {
+          const methods = getAuthMethods(protocol);
+          expect(methods.length).toBeGreaterThan(0);
+        }),
       );
     });
 
@@ -125,7 +113,7 @@ describe('protocol-config property tests', () => {
     it('returns non-empty array for every non-SSH protocol', () => {
       fc.assert(
         fc.property(
-          fc.constantFrom<Protocol>('SFTP', 'FTP', 'Telnet', 'Raw', 'Serial'),
+          fc.constantFrom<Protocol>('SFTP', 'FTP'),
           (protocol) => {
             const hidden = getHiddenFields(protocol);
             expect(hidden.length).toBeGreaterThan(0);
@@ -137,7 +125,7 @@ describe('protocol-config property tests', () => {
     it('hidden fields always includes compression & keepAliveInterval for non-SSH', () => {
       fc.assert(
         fc.property(
-          fc.constantFrom<Protocol>('SFTP', 'FTP', 'Telnet', 'Raw', 'Serial'),
+          fc.constantFrom<Protocol>('SFTP', 'FTP'),
           (protocol) => {
             const hidden = getHiddenFields(protocol);
             expect(hidden).toContain('compression');

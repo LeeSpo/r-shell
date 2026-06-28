@@ -4,7 +4,7 @@ import { useTerminalCallbacks } from '../../lib/terminal-callbacks-context';
 import { GroupTabBar } from './group-tab-bar';
 import { PtyTerminal } from '../pty-terminal';
 import { FileBrowserView } from '../file-browser-view';
-import { DesktopViewer } from '../desktop-viewer';
+
 import { FileEditorView } from '../file-editor-view';
 import { WelcomeScreen } from '../welcome-screen';
 
@@ -52,7 +52,7 @@ export function TerminalGroupView({ groupId }: TerminalGroupViewProps) {
   const handleReconnect = useCallback(
     (tabId: string) => {
       if (onReconnectTab) {
-        // Full reconnect: re-establishes the backend SSH/SFTP/desktop session
+        // Full reconnect: re-establishes the backend SSH/SFTP session
         // before remounting the terminal (App.tsx dispatches RECONNECT_TAB on success).
         void onReconnectTab(tabId);
       } else {
@@ -127,16 +127,7 @@ export function TerminalGroupView({ groupId }: TerminalGroupViewProps) {
               className="absolute inset-0"
               style={{ display: tab.id === group.activeTabId ? 'block' : 'none' }}
             >
-              {tab.tabType === 'desktop' ? (
-                <DesktopViewer
-                  connectionId={tab.id}
-                  connectionName={tab.name}
-                  host={tab.host}
-                  protocol={tab.protocol}
-                  isConnected={tab.connectionStatus === 'connected'}
-                  onReconnect={() => handleReconnect(tab.id)}
-                />
-              ) : tab.tabType === 'file-browser' ? (
+              {tab.tabType === 'file-browser' ? (
                 <FileBrowserView
                   connectionId={tab.id}
                   connectionName={tab.name}

@@ -1,14 +1,11 @@
 mod commands;
 mod connection_manager;
-mod desktop_protocol;
 mod ftp_client;
 mod local_shell;
 mod os_detect;
 mod pty_session;
-mod rdp_client;
 mod sftp_client;
 mod ssh;
-mod vnc_client;
 mod websocket_server;
 
 use connection_manager::ConnectionManager;
@@ -318,14 +315,6 @@ pub fn run() {
             // Directory synchronization commands
             commands::list_local_files_recursive,
             commands::list_remote_files_recursive,
-            // Desktop (RDP/VNC) commands
-            commands::desktop_connect,
-            commands::desktop_disconnect,
-            commands::desktop_send_key,
-            commands::desktop_send_pointer,
-            commands::desktop_request_frame,
-            commands::desktop_set_clipboard,
-            commands::desktop_resize,
             commands::update_menu_language,
             commands::get_system_locale,
             // Note: PTY terminal I/O now uses WebSocket instead of IPC

@@ -13,9 +13,6 @@ describe('Connection Dialog protocol-specific behavior', () => {
     it('SSH → 22', () => expect(getDefaultPort('SSH')).toBe(22));
     it('SFTP → 22', () => expect(getDefaultPort('SFTP')).toBe(22));
     it('FTP → 21', () => expect(getDefaultPort('FTP')).toBe(21));
-    it('Telnet → 23', () => expect(getDefaultPort('Telnet')).toBe(23));
-    it('Raw → 0', () => expect(getDefaultPort('Raw')).toBe(0));
-    it('Serial → 0', () => expect(getDefaultPort('Serial')).toBe(0));
   });
 
   describe('auth method options per protocol', () => {
@@ -33,19 +30,6 @@ describe('Connection Dialog protocol-specific behavior', () => {
       const methods = getAuthMethods('FTP');
       expect(methods).toEqual(['password', 'anonymous']);
     });
-
-    it('Telnet has only password', () => {
-      const methods = getAuthMethods('Telnet');
-      expect(methods).toEqual(['password']);
-    });
-
-    it('Raw has no auth methods', () => {
-      expect(getAuthMethods('Raw')).toEqual([]);
-    });
-
-    it('Serial has no auth methods', () => {
-      expect(getAuthMethods('Serial')).toEqual([]);
-    });
   });
 
   describe('FTPS toggle visibility', () => {
@@ -57,7 +41,7 @@ describe('Connection Dialog protocol-specific behavior', () => {
     });
 
     it('non-FTP protocols should not show FTPS toggle', () => {
-      const nonFtp: Protocol[] = ['SSH', 'SFTP', 'Telnet', 'Raw', 'Serial'];
+      const nonFtp: Protocol[] = ['SSH', 'SFTP'];
       nonFtp.forEach(p => {
         expect(p).not.toBe('FTP');
       });
@@ -84,7 +68,7 @@ describe('Connection Dialog protocol-specific behavior', () => {
     });
 
     it('all non-SSH protocols hide SSH-specific fields', () => {
-      const nonSsh: Protocol[] = ['SFTP', 'FTP', 'Telnet', 'Raw', 'Serial'];
+      const nonSsh: Protocol[] = ['SFTP', 'FTP'];
       nonSsh.forEach(p => {
         const hidden = getHiddenFields(p);
         expect(hidden.length).toBe(3);
