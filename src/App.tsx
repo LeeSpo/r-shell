@@ -1307,7 +1307,7 @@ function AppContent() {
                       </div>
                     </TabsContent>
 
-                    <TabsContent value="logs" forceMount className="absolute inset-0 mt-0 data-[state=inactive]:hidden">
+                    <TabsContent value="logs" className="absolute inset-0 mt-0 data-[state=inactive]:hidden">
                       {activeConnection ? (
                         <ErrorBoundary label={t('app.logMonitor')}>
                           <LogMonitor

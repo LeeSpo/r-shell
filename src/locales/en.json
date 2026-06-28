@@ -881,6 +881,16 @@
     "failedToSaveOutput": "Failed to save output"
   },
   "systemMonitor": {
+    "panelPicker": {
+      "title": "Panels",
+      "overview": "Overview",
+      "processes": "Processes",
+      "disk": "Disk",
+      "gpu": "GPU",
+      "network": "Network",
+      "latency": "Latency",
+      "noneEnabled": "Enable panels above to start monitoring"
+    },
     "systemOverview": "System Overview",
     "cpu": "CPU",
     "memory": "Memory",
