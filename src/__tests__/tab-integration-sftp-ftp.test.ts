@@ -242,6 +242,30 @@ describe('SFTP/FTP tab integration unit tests', () => {
       const leftSidebarVisible = true;
       expect(leftSidebarVisible).toBe(true); // Not conditioned on tab type
     });
+
+    it('extra panel toggle buttons hidden when hideExtraPanels is true', () => {
+      const hideExtraPanels = true;
+      const showExtraPanelToggles = !hideExtraPanels;
+      expect(showExtraPanelToggles).toBe(false);
+    });
+
+    it('extra panel toggle buttons shown for SSH terminal tabs', () => {
+      const activeTab = createTab({ tabType: 'terminal', protocol: 'SSH' });
+      const isFileBrowserTab = activeTab.tabType === 'file-browser';
+      const isEditorTab = activeTab.tabType === 'editor';
+      const isLocalTab = activeTab.protocol === 'Local';
+      const hideExtraPanels = isFileBrowserTab || isEditorTab || isLocalTab;
+      expect(!hideExtraPanels).toBe(true);
+    });
+
+    it('extra panel toggle buttons hidden for local terminal tabs', () => {
+      const activeTab = createTab({ protocol: 'Local', host: 'localhost' });
+      const isFileBrowserTab = activeTab.tabType === 'file-browser';
+      const isEditorTab = activeTab.tabType === 'editor';
+      const isLocalTab = activeTab.protocol === 'Local';
+      const hideExtraPanels = isFileBrowserTab || isEditorTab || isLocalTab;
+      expect(!hideExtraPanels).toBe(false);
+    });
   });
 
   describe('switching between terminal and file-browser tabs', () => {

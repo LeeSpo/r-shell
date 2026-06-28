@@ -1189,6 +1189,7 @@ function AppContent() {
         leftSidebarVisible={layout.leftSidebarVisible}
         rightSidebarVisible={layout.rightSidebarVisible && hasAnyTabs && !hideExtraPanels}
         bottomPanelVisible={layout.bottomPanelVisible && !hideExtraPanels}
+        showExtraPanelToggles={!hideExtraPanels}
         zenMode={layout.zenMode}
       />
 

@@ -52,6 +52,7 @@ interface ToolbarProps {
   leftSidebarVisible?: boolean;
   rightSidebarVisible?: boolean;
   bottomPanelVisible?: boolean;
+  showExtraPanelToggles?: boolean;
   zenMode?: boolean;
 }
 
@@ -72,6 +73,7 @@ export function Toolbar({
   leftSidebarVisible,
   rightSidebarVisible,
   bottomPanelVisible,
+  showExtraPanelToggles = true,
   zenMode
 }: ToolbarProps) {
   const { t } = useTranslation();
@@ -282,33 +284,37 @@ export function Toolbar({
           <TooltipContent>{t(leftSidebarVisible ? 'common.hide' : 'common.show')} {t('toolbar.toggleConnectionManager')}</TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onToggleBottomPanel}
-              className={!bottomPanelVisible ? 'opacity-50' : ''}
-            >
-              {bottomPanelVisible ? <PanelBottomClose className="w-4 h-4" /> : <PanelBottomOpen className="w-4 h-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t(bottomPanelVisible ? 'common.hide' : 'common.show')} {t('toolbar.toggleFileBrowser')}</TooltipContent>
-        </Tooltip>
+        {showExtraPanelToggles && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={onToggleBottomPanel}
+                className={!bottomPanelVisible ? 'opacity-50' : ''}
+              >
+                {bottomPanelVisible ? <PanelBottomClose className="w-4 h-4" /> : <PanelBottomOpen className="w-4 h-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t(bottomPanelVisible ? 'common.hide' : 'common.show')} {t('toolbar.toggleFileBrowser')}</TooltipContent>
+          </Tooltip>
+        )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onToggleRightSidebar}
-              className={!rightSidebarVisible ? 'opacity-50' : ''}
-            >
-              {rightSidebarVisible ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t(rightSidebarVisible ? 'common.hide' : 'common.show')} {t('toolbar.toggleMonitorPanel')}</TooltipContent>
-        </Tooltip>
+        {showExtraPanelToggles && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={onToggleRightSidebar}
+                className={!rightSidebarVisible ? 'opacity-50' : ''}
+              >
+                {rightSidebarVisible ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t(rightSidebarVisible ? 'common.hide' : 'common.show')} {t('toolbar.toggleMonitorPanel')}</TooltipContent>
+          </Tooltip>
+        )}
 
         <Tooltip>
           <TooltipTrigger asChild>
