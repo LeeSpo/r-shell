@@ -134,12 +134,7 @@
       "keyboardInteractive": "Keyboard Interactive",
       "anonymous": "Anonymous"
     },
-    "securityNote": {
-      "title": "Security Note",
-      "password": "For production environments, we recommend using public key authentication instead of passwords for enhanced security.",
-      "anonymous": "Anonymous connections are not encrypted. Use FTPS for secure file transfers when possible.",
-      "publicKey": "Public key authentication is more secure than passwords. skd supports RSA, Ed25519, and ECDSA keys."
-    },
+
     "ftp": {
       "enableFtps": "Enable FTPS (FTP over TLS)",
       "enableFtpsDesc": "Encrypt the FTP connection using TLS for improved security"

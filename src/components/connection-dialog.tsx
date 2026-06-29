@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import {
   Server,
   Shield,
-  Key,
+
   Network,
   Terminal as TerminalIcon,
 } from 'lucide-react';
@@ -676,14 +676,6 @@ export function ConnectionDialog({
                   </div>
                 )}
 
-                {config.authMethod === 'anonymous' && (
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">
-                      {t('connectionDialog.securityNote.anonymous')}
-                    </p>
-                  </div>
-                )}
-
                 {config.protocol === 'FTP' && (
                   <>
                     <Separator />
@@ -702,21 +694,7 @@ export function ConnectionDialog({
                   </>
                 )}
 
-                <div className="p-4 bg-muted rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Key className="h-4 w-4" />
-                    <span className="font-medium">{t('connectionDialog.securityNote.title')}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {config.authMethod === 'password' ? (
-                      <>{t('connectionDialog.securityNote.password')}</>
-                    ) : config.authMethod === 'anonymous' ? (
-                      <>{t('connectionDialog.securityNote.anonymous')}</>
-                    ) : (
-                      <>{t('connectionDialog.securityNote.publicKey')}</>
-                    )}
-                  </p>
-                </div>
+
               </CardContent>
             </Card>
           </TabsContent>
