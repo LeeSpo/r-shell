@@ -96,4 +96,14 @@ describe('credential storage', () => {
       connectionId: 'conn-3',
     });
   });
+
+  it('stores private_key in Keychain when provided', async () => {
+    await storeConnectionSecrets('conn-4', { privateKey: 'pem-content' }, { force: true });
+
+    expect(invokeMock).toHaveBeenCalledWith('store_connection_secret', {
+      connectionId: 'conn-4',
+      secretType: 'private_key',
+      secret: 'pem-content',
+    });
+  });
 });

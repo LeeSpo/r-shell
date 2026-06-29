@@ -35,11 +35,16 @@ export interface ConnectionData {
   authMethod?: 'password' | 'publickey' | 'keyboard-interactive' | 'anonymous';
   /** Transient only — never persisted to localStorage; use Keychain on macOS */
   password?: string;
+  privateKeySource?: 'path' | 'paste';
+  /** Display-only path when source is path; not used for authentication */
   privateKeyPath?: string;
+  /** Transient only — never persisted to localStorage; use Keychain on macOS */
+  privateKeyContent?: string;
   /** Transient only — never persisted to localStorage; use Keychain on macOS */
   passphrase?: string;
   hasStoredPassword?: boolean;
   hasStoredPassphrase?: boolean;
+  hasStoredPrivateKey?: boolean;
   // FTP-specific
   ftpsEnabled?: boolean;
 }
@@ -48,6 +53,7 @@ function sanitizeConnectionForStorage(connection: ConnectionData): ConnectionDat
   const {
     password: _password,
     passphrase: _passphrase,
+    privateKeyContent: _privateKeyContent,
     ...persisted
   } = connection;
 
@@ -67,7 +73,11 @@ export function connectionHasStoredCredentials(connection: ConnectionData): bool
     return !!(connection.password || connection.hasStoredPassword);
   }
 
-  return !!connection.privateKeyPath;
+  return !!(
+    connection.privateKeyContent ||
+    connection.hasStoredPrivateKey ||
+    connection.privateKeyPath
+  );
 }
 
 export interface ConnectionFolder {
@@ -554,12 +564,14 @@ export async function getConnectionWithCredentials(id: string): Promise<Connecti
   const secrets = await loadConnectionSecrets(id, {
     hasStoredPassword: connection.hasStoredPassword,
     hasStoredPassphrase: connection.hasStoredPassphrase,
+    hasStoredPrivateKey: connection.hasStoredPrivateKey,
   });
 
   return {
     ...connection,
     password: secrets.password,
     passphrase: secrets.passphrase,
+    privateKeyContent: secrets.privateKey,
   };
 }
 
@@ -575,6 +587,7 @@ export async function saveConnectionWithCredentials(
     ...connection,
     hasStoredPassword: credentialFlags.hasStoredPassword,
     hasStoredPassphrase: credentialFlags.hasStoredPassphrase,
+    hasStoredPrivateKey: credentialFlags.hasStoredPrivateKey,
   });
 }
 
@@ -593,6 +606,7 @@ export async function updateConnectionWithCredentials(
     ...updates,
     hasStoredPassword: credentialFlags.hasStoredPassword,
     hasStoredPassphrase: credentialFlags.hasStoredPassphrase,
+    hasStoredPrivateKey: credentialFlags.hasStoredPrivateKey,
   });
 }
 

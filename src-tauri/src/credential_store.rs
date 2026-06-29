@@ -7,6 +7,7 @@ const SERVICE: &str = "com.spo.skd";
 pub enum SecretKind {
     Password,
     Passphrase,
+    PrivateKey,
 }
 
 impl SecretKind {
@@ -14,6 +15,7 @@ impl SecretKind {
         match value {
             "password" => Ok(Self::Password),
             "passphrase" => Ok(Self::Passphrase),
+            "private_key" => Ok(Self::PrivateKey),
             _ => Err(format!("Unknown secret kind: {value}")),
         }
     }
@@ -22,6 +24,7 @@ impl SecretKind {
         match self {
             Self::Password => "password",
             Self::Passphrase => "passphrase",
+            Self::PrivateKey => "private_key",
         }
     }
 }
@@ -70,7 +73,8 @@ pub fn get_connection_secret(connection_id: &str, secret_type: &str) -> Result<O
 
 pub fn delete_connection_secrets(connection_id: &str) -> Result<(), String> {
     delete_secret(&account_key(connection_id, SecretKind::Password))?;
-    delete_secret(&account_key(connection_id, SecretKind::Passphrase))
+    delete_secret(&account_key(connection_id, SecretKind::Passphrase))?;
+    delete_secret(&account_key(connection_id, SecretKind::PrivateKey))
 }
 
 #[cfg(test)]
@@ -101,13 +105,16 @@ mod tests {
         let connection_id = "conn-42";
         store_connection_secret(connection_id, "password", "pw").expect("store password");
         store_connection_secret(connection_id, "passphrase", "pp").expect("store passphrase");
+        store_connection_secret(connection_id, "private_key", "key-pem").expect("store private key");
 
         let password = get_connection_secret(connection_id, "password").expect("get password");
         let passphrase = get_connection_secret(connection_id, "passphrase").expect("get passphrase");
+        let private_key = get_connection_secret(connection_id, "private_key").expect("get private key");
 
         if password.is_some() {
             assert_eq!(password.as_deref(), Some("pw"));
             assert_eq!(passphrase.as_deref(), Some("pp"));
+            assert_eq!(private_key.as_deref(), Some("key-pem"));
         }
 
         delete_connection_secrets(connection_id).expect("delete all");
@@ -117,6 +124,9 @@ mod tests {
             .is_none());
         assert!(get_connection_secret(connection_id, "passphrase")
             .expect("get passphrase after delete")
+            .is_none());
+        assert!(get_connection_secret(connection_id, "private_key")
+            .expect("get private key after delete")
             .is_none());
     }
 }

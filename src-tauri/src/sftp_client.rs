@@ -1,13 +1,13 @@
 use anyhow::Result;
 use russh::*;
-use russh_keys::*;
+
 use russh_sftp::client::SftpSession;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::ssh::Client;
+use crate::ssh::{load_private_key_from_content, SshHandler};
 
 /// Configuration for a standalone SFTP connection (SSH transport, no PTY).
 #[derive(Debug, Clone, Deserialize)]
@@ -16,6 +16,12 @@ pub struct SftpConfig {
     pub port: u16,
     pub username: String,
     pub auth_method: SftpAuthMethod,
+    #[serde(default = "default_host_key_verification")]
+    pub host_key_verification: bool,
+}
+
+fn default_host_key_verification() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -25,7 +31,7 @@ pub enum SftpAuthMethod {
         password: String,
     },
     PublicKey {
-        key_path: String,
+        key_content: String,
         passphrase: Option<String>,
     },
 }
@@ -54,7 +60,7 @@ pub enum FileEntryType {
 /// Standalone SFTP client — opens an SSH connection and SFTP subsystem
 /// channel without allocating a PTY.
 pub struct StandaloneSftpClient {
-    session: Option<Arc<client::Handle<Client>>>,
+    session: Option<Arc<client::Handle<SshHandler>>>,
     sftp: Option<SftpSession>,
 }
 
@@ -77,12 +83,17 @@ impl StandaloneSftpClient {
         };
         let connection_timeout = Duration::from_secs(10);
 
+        let handler = SshHandler::new(
+            config.host.clone(),
+            config.port,
+            config.host_key_verification,
+        );
         let mut ssh_session = tokio::time::timeout(
             connection_timeout,
             client::connect(
                 Arc::new(ssh_config),
                 (&config.host[..], config.port),
-                Client,
+                handler,
             ),
         )
         .await
@@ -107,38 +118,10 @@ impl StandaloneSftpClient {
                 .await
                 .map_err(|e| anyhow::anyhow!("SFTP password authentication failed: {}", e))?,
             SftpAuthMethod::PublicKey {
-                key_path,
+                key_content,
                 passphrase,
             } => {
-                let expanded_path = if key_path.starts_with("~/") {
-                    if let Ok(home) = std::env::var("HOME") {
-                        key_path.replacen("~", &home, 1)
-                    } else {
-                        key_path.clone()
-                    }
-                } else {
-                    key_path.clone()
-                };
-
-                if !std::path::Path::new(&expanded_path).exists() {
-                    return Err(anyhow::anyhow!(
-                        "SSH key file not found: {}. Please check the file path.",
-                        key_path
-                    ));
-                }
-
-                let key =
-                    decode_secret_key(&expanded_path, passphrase.as_deref()).map_err(|e| {
-                        if e.to_string().contains("encrypted")
-                            || e.to_string().contains("passphrase")
-                        {
-                            anyhow::anyhow!(
-                                "Failed to decrypt SSH key. Please provide the correct passphrase."
-                            )
-                        } else {
-                            anyhow::anyhow!("Failed to load SSH key from {}: {}.", key_path, e)
-                        }
-                    })?;
+                let key = load_private_key_from_content(key_content, passphrase.as_deref())?;
 
                 ssh_session
                     .authenticate_publickey(&config.username, Arc::new(key))
@@ -566,15 +549,15 @@ mod tests {
 
     #[test]
     fn test_sftp_config_publickey() {
-        let json = r#"{"host":"server","port":2222,"username":"deploy","auth_method":{"type":"PublicKey","key_path":"/home/user/.ssh/id_rsa","passphrase":null}}"#;
+        let json = r#"{"host":"server","port":2222,"username":"deploy","host_key_verification":true,"auth_method":{"type":"PublicKey","key_content":"-----BEGIN PRIVATE KEY-----\nMIIB...\n-----END PRIVATE KEY-----","passphrase":null}}"#;
         let config: SftpConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.port, 2222);
         match config.auth_method {
             SftpAuthMethod::PublicKey {
-                key_path,
+                key_content,
                 passphrase,
             } => {
-                assert_eq!(key_path, "/home/user/.ssh/id_rsa");
+                assert!(key_content.contains("BEGIN PRIVATE KEY"));
                 assert!(passphrase.is_none());
             }
             _ => panic!("Expected PublicKey auth method"),

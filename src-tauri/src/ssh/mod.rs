@@ -1,7 +1,13 @@
+mod key_loader;
+
+use crate::known_hosts::{
+    format_mismatch_host_error, format_unknown_host_error, verify_host_key, VerifyResult,
+};
 use crate::pty_session::PtySession;
 use anyhow::Result;
 use russh::*;
 use russh_keys::*;
+pub use key_loader::{key_file_permission_warning, load_private_key_from_content, read_private_key_file};
 use russh_sftp::client::SftpSession;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -30,6 +36,7 @@ pub struct SshConfig {
     pub port: u16,
     pub username: String,
     pub auth_method: AuthMethod,
+    pub host_key_verification: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,7 +46,7 @@ pub enum AuthMethod {
         password: String,
     },
     PublicKey {
-        key_path: String,
+        key_content: String,
         passphrase: Option<String>,
     },
 }
@@ -48,19 +55,56 @@ pub struct SshClient {
     session: Option<Arc<client::Handle<Client>>>,
 }
 
-pub struct Client;
+/// SSH client handler with optional host-key verification.
+pub struct SshHandler {
+    pub host: String,
+    pub port: u16,
+    pub verify_host_key: bool,
+}
+
+impl SshHandler {
+    pub fn new(host: String, port: u16, verify_host_key: bool) -> Self {
+        Self {
+            host,
+            port,
+            verify_host_key,
+        }
+    }
+}
 
 #[async_trait::async_trait]
-impl client::Handler for Client {
-    type Error = russh::Error;
+impl client::Handler for SshHandler {
+    type Error = anyhow::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &key::PublicKey,
+        server_public_key: &key::PublicKey,
     ) -> Result<bool, Self::Error> {
-        Ok(true) // In production, verify the server key
+        if !self.verify_host_key {
+            return Ok(true);
+        }
+
+        match verify_host_key(&self.host, self.port, server_public_key)? {
+            VerifyResult::Known => Ok(true),
+            VerifyResult::Unknown { .. } => Err(anyhow::anyhow!(format_unknown_host_error(
+                &self.host,
+                self.port,
+                server_public_key,
+            ))),
+            VerifyResult::Mismatch { .. } => {
+                let result = verify_host_key(&self.host, self.port, server_public_key)?;
+                Err(anyhow::anyhow!(format_mismatch_host_error(
+                    &self.host,
+                    self.port,
+                    &result,
+                )))
+            }
+        }
     }
 }
+
+/// Backward-compatible alias used by SFTP client.
+pub type Client = SshHandler;
 
 impl SshClient {
     pub fn new() -> Self {
@@ -84,9 +128,14 @@ impl SshClient {
         // Connection timeout: 3 seconds
         let connection_timeout = Duration::from_secs(3);
 
+        let handler = SshHandler::new(
+            config.host.clone(),
+            config.port,
+            config.host_key_verification,
+        );
         let mut ssh_session = tokio::time::timeout(
             connection_timeout,
-            client::connect(Arc::new(ssh_config), (&config.host[..], config.port), Client)
+            client::connect(Arc::new(ssh_config), (&config.host[..], config.port), handler)
         ).await
             .map_err(|_| anyhow::anyhow!("Connection timed out after 3 seconds. Please check the host address and network connectivity."))?
             .map_err(|e| anyhow::anyhow!("Failed to connect to {}:{}: {}", config.host, config.port, e))?;
@@ -97,52 +146,10 @@ impl SshClient {
                 .await
                 .map_err(|e| anyhow::anyhow!("Password authentication failed: {}", e))?,
             AuthMethod::PublicKey {
-                key_path,
+                key_content,
                 passphrase,
             } => {
-                // Expand tilde in path — use dirs::home_dir() for cross-platform
-                // support (HOME is not set on Windows; USERPROFILE is used instead).
-                let expanded_path = if key_path.starts_with("~/") || key_path.starts_with("~\\") {
-                    if let Some(home) = dirs::home_dir() {
-                        let home_str = home.to_string_lossy();
-                        key_path.replacen('~', &home_str, 1)
-                    } else {
-                        key_path.clone()
-                    }
-                } else {
-                    key_path.clone()
-                };
-
-                // Check if file exists
-                if !std::path::Path::new(&expanded_path).exists() {
-                    return Err(anyhow::anyhow!(
-                        "SSH key file not found: {}. Please check the file path and try again.",
-                        key_path
-                    ));
-                }
-
-                // Read the key file and normalise CRLF line endings so that keys
-                // created or edited on Windows (which use \r\n) are parsed correctly
-                // by russh-keys' PEM / OpenSSH decoder.
-                let key_content = std::fs::read_to_string(&expanded_path).map_err(|e| {
-                    anyhow::anyhow!("Failed to read SSH key file {}: {}", key_path, e)
-                })?;
-                let key_content = key_content.replace("\r\n", "\n");
-
-                // decode_secret_key takes the key *content* as a &str.
-                let key = decode_secret_key(&key_content, passphrase.as_deref())
-                    .map_err(|e| {
-                        if e.to_string().contains("encrypted") || e.to_string().contains("passphrase") {
-                            anyhow::anyhow!(
-                                "Failed to decrypt SSH key. The key may be encrypted. Please provide the correct passphrase."
-                            )
-                        } else {
-                            anyhow::anyhow!(
-                                "Failed to load SSH key from {}: {}. Ensure the file is a valid SSH private key (RSA, Ed25519, or ECDSA).",
-                                key_path, e
-                            )
-                        }
-                    })?;
+                let key = load_private_key_from_content(key_content, passphrase.as_deref())?;
 
                 ssh_session
                     .authenticate_publickey(&config.username, Arc::new(key))

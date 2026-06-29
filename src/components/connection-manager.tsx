@@ -143,7 +143,9 @@ export function ConnectionManager({
           protocol: node.protocol || 'SSH',
           folder: connectionData.folder || 'All Connections',
           authMethod: connectionData.authMethod,
+          privateKeySource: connectionData.privateKeySource,
           privateKeyPath: connectionData.privateKeyPath,
+          hasStoredPrivateKey: connectionData.hasStoredPrivateKey,
         });
         if (duplicated) {
           setConnections(loadConnections());

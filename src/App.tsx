@@ -33,7 +33,16 @@ import { GridRenderer } from './components/terminal/grid-renderer';
 import { ErrorBoundary } from './components/error-boundary';
 import type { TerminalTab } from './lib/terminal-group-types';
 import { Toaster } from './components/ui/sonner';
+import { HostKeyTrustDialog } from './components/host-key-trust-dialog';
 import { toast } from 'sonner';
+import type { ConnectionData } from './lib/connection-storage';
+import { getPrivateKeyContentForConnection } from './lib/resolve-private-key';
+import {
+  sshConnectWithHostKeyTrust,
+  sftpConnectWithHostKeyTrust,
+  type HostKeyTrustRequest,
+} from './lib/ssh-connect';
+import type { UnknownHostKeyPayload } from './lib/host-key-verification';
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './components/ui/resizable';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -74,6 +83,22 @@ function AppContent() {
   const [externalLogPathKey, setExternalLogPathKey] = useState(0);
 
   const defaultLocalShellOpenedRef = useRef(false);
+  const hostKeyRetryRef = useRef<(() => Promise<{ success: boolean; error?: string }>) | null>(null);
+  const [hostKeyTrustOpen, setHostKeyTrustOpen] = useState(false);
+  const [hostKeyTrustPayload, setHostKeyTrustPayload] = useState<UnknownHostKeyPayload | null>(null);
+
+  const onHostKeyTrustRequired = useCallback((request: HostKeyTrustRequest) => {
+    setHostKeyTrustPayload(request.payload);
+    hostKeyRetryRef.current = request.retry;
+    setHostKeyTrustOpen(true);
+  }, []);
+
+  const buildAuthRequest = useCallback(async (data: ConnectionData) => ({
+    auth_method: data.authMethod || 'password',
+    password: data.password || '',
+    key_content: await getPrivateKeyContentForConnection(data),
+    passphrase: data.passphrase || null,
+  }), []);
 
   // Layout management
   const {
@@ -274,18 +299,20 @@ function AppContent() {
 
         try {
           if (isSftp) {
-            await invoke('sftp_connect', {
-              request: {
+            const auth = await buildAuthRequest(connectionData);
+            const sftpResult = await sftpConnectWithHostKeyTrust(
+              {
                 connection_id: sessionId,
                 host: connectionData.host,
                 port: connectionData.port || 22,
                 username: connectionData.username,
-                auth_method: connectionData.authMethod || 'password',
-                password: connectionData.password || '',
-                key_path: connectionData.privateKeyPath || null,
-                passphrase: connectionData.passphrase || null,
-              }
-            });
+                ...auth,
+              },
+              onHostKeyTrustRequired,
+            );
+            if (!sftpResult.success) {
+              throw new Error(sftpResult.error || 'SFTP connection failed');
+            }
           } else {
             await invoke('ftp_connect', {
               request: {
@@ -310,20 +337,16 @@ function AppContent() {
       } else {
         // SSH connect flow (existing behavior)
         try {
-          const result = await invoke<{ success: boolean; error?: string }>(
-            'ssh_connect',
+          const auth = await buildAuthRequest(connectionData);
+          const result = await sshConnectWithHostKeyTrust(
             {
-              request: {
-                connection_id: sessionId,
-                host: connectionData.host,
-                port: connectionData.port || 22,
-                username: connectionData.username,
-                auth_method: connectionData.authMethod || 'password',
-                password: connectionData.password || '',
-                key_path: connectionData.privateKeyPath || null,
-                passphrase: connectionData.passphrase || null,
-              }
-            }
+              connection_id: sessionId,
+              host: connectionData.host,
+              port: connectionData.port || 22,
+              username: connectionData.username,
+              ...auth,
+            },
+            onHostKeyTrustRequired,
           );
 
           if (result.success) {
@@ -488,18 +511,20 @@ function AppContent() {
 
         try {
           if (isSftp) {
-            await invoke('sftp_connect', {
-              request: {
+            const auth = await buildAuthRequest(connectionData);
+            const sftpResult = await sftpConnectWithHostKeyTrust(
+              {
                 connection_id: duplicateId,
                 host: connectionData.host,
                 port: connectionData.port || 22,
                 username: connectionData.username,
-                auth_method: connectionData.authMethod || 'password',
-                password: connectionData.password || '',
-                key_path: connectionData.privateKeyPath || null,
-                passphrase: connectionData.passphrase || null,
-              }
-            });
+                ...auth,
+              },
+              onHostKeyTrustRequired,
+            );
+            if (!sftpResult.success) {
+              throw new Error(sftpResult.error || 'SFTP connection failed');
+            }
           } else {
             await invoke('ftp_connect', {
               request: {
@@ -525,20 +550,16 @@ function AppContent() {
         }
       } else {
         // SSH duplicate flow
-        const result = await invoke<{ success: boolean; error?: string }>(
-          'ssh_connect',
+        const auth = await buildAuthRequest(connectionData);
+        const result = await sshConnectWithHostKeyTrust(
           {
-            request: {
-              connection_id: duplicateId,
-              host: connectionData.host,
-              port: connectionData.port || 22,
-              username: connectionData.username,
-              auth_method: connectionData.authMethod || 'password',
-              password: connectionData.password || '',
-              key_path: connectionData.privateKeyPath || null,
-              passphrase: connectionData.passphrase || null,
-            }
-          }
+            connection_id: duplicateId,
+            host: connectionData.host,
+            port: connectionData.port || 22,
+            username: connectionData.username,
+            ...auth,
+          },
+          onHostKeyTrustRequired,
         );
 
         if (result.success) {
@@ -644,18 +665,20 @@ function AppContent() {
         }
 
         if (isSftp) {
-          await invoke('sftp_connect', {
-            request: {
+          const auth = await buildAuthRequest(connectionData);
+          const sftpResult = await sftpConnectWithHostKeyTrust(
+            {
               connection_id: tabId,
               host: connectionData.host,
               port: connectionData.port || 22,
               username: connectionData.username,
-              auth_method: connectionData.authMethod || 'password',
-              password: connectionData.password || '',
-              key_path: connectionData.privateKeyPath || null,
-              passphrase: connectionData.passphrase || null,
-            }
-          });
+              ...auth,
+            },
+            onHostKeyTrustRequired,
+          );
+          if (!sftpResult.success) {
+            throw new Error(sftpResult.error || 'SFTP connection failed');
+          }
         } else {
           await invoke('ftp_connect', {
             request: {
@@ -685,20 +708,16 @@ function AppContent() {
           // Ignore errors when disconnecting
         }
 
-        const result = await invoke<{ success: boolean; error?: string }>(
-          'ssh_connect',
+        const auth = await buildAuthRequest(connectionData);
+        const result = await sshConnectWithHostKeyTrust(
           {
-            request: {
-              connection_id: tabId,
-              host: connectionData.host,
-              port: connectionData.port || 22,
-              username: connectionData.username,
-              auth_method: connectionData.authMethod || 'password',
-              password: connectionData.password || '',
-              key_path: connectionData.privateKeyPath || null,
-              passphrase: connectionData.passphrase || null,
-            }
-          }
+            connection_id: tabId,
+            host: connectionData.host,
+            port: connectionData.port || 22,
+            username: connectionData.username,
+            ...auth,
+          },
+          onHostKeyTrustRequired,
         );
 
         if (result.success) {
@@ -843,18 +862,22 @@ function AppContent() {
       if (isFileBrowser) {
         try {
           if (isSftp) {
-            await invoke('sftp_connect', {
-              request: {
+            const sftpResult = await sftpConnectWithHostKeyTrust(
+              {
                 connection_id: tabId,
                 host: config.host,
                 port: config.port || 22,
                 username: config.username,
                 auth_method: config.authMethod || 'password',
                 password: config.password || '',
-                key_path: config.privateKeyPath || null,
+                key_content: config.privateKeyContent || null,
                 passphrase: config.passphrase || null,
-              }
-            });
+              },
+              onHostKeyTrustRequired,
+            );
+            if (!sftpResult.success) {
+              throw new Error(sftpResult.error || 'SFTP connection failed');
+            }
           } else {
             await invoke('ftp_connect', {
               request: {
@@ -893,18 +916,22 @@ function AppContent() {
 
         try {
           if (isSftp) {
-            await invoke('sftp_connect', {
-              request: {
+            const sftpResult = await sftpConnectWithHostKeyTrust(
+              {
                 connection_id: tabId,
                 host: config.host,
                 port: config.port || 22,
                 username: config.username,
                 auth_method: config.authMethod || 'password',
                 password: config.password || '',
-                key_path: config.privateKeyPath || null,
+                key_content: config.privateKeyContent || null,
                 passphrase: config.passphrase || null,
-              }
-            });
+              },
+              onHostKeyTrustRequired,
+            );
+            if (!sftpResult.success) {
+              throw new Error(sftpResult.error || 'SFTP connection failed');
+            }
           } else {
             await invoke('ftp_connect', {
               request: {
@@ -1005,6 +1032,7 @@ function AppContent() {
           port: connectionData.port,
           username: connectionData.username,
           authMethod: connectionData.authMethod || 'password',
+          privateKeySource: connectionData.privateKeySource,
           privateKeyPath: connectionData.privateKeyPath,
         });
         setConnectionDialogOpen(true);
@@ -1084,7 +1112,9 @@ function AppContent() {
         username: connectionData.username,
         authMethod: connectionData.authMethod || 'password',
         password: connectionData.password,
+        privateKeySource: connectionData.privateKeySource,
         privateKeyPath: connectionData.privateKeyPath,
+        privateKeyContent: connectionData.privateKeyContent,
         passphrase: connectionData.passphrase,
         ftpsEnabled: connectionData.ftpsEnabled,
       };
@@ -1095,20 +1125,16 @@ function AppContent() {
     } else {
       // SSH quick connect (existing behavior)
       try {
-        const result = await invoke<{ success: boolean; error?: string }>(
-          'ssh_connect',
+        const auth = await buildAuthRequest(connectionData);
+        const result = await sshConnectWithHostKeyTrust(
           {
-            request: {
-              connection_id: connectionData.id,
-              host: connectionData.host,
-              port: connectionData.port || 22,
-              username: connectionData.username,
-              auth_method: connectionData.authMethod || 'password',
-              password: connectionData.password || '',
-              key_path: connectionData.privateKeyPath || null,
-              passphrase: connectionData.passphrase || null,
-            }
-          }
+            connection_id: connectionData.id,
+            host: connectionData.host,
+            port: connectionData.port || 22,
+            username: connectionData.username,
+            ...auth,
+          },
+          onHostKeyTrustRequired,
         );
 
         if (result.success) {
@@ -1345,6 +1371,23 @@ function AppContent() {
           // via their own settings listeners in TerminalGroupView
         }}
         onCheckForUpdates={() => setUpdateCheckSignal((current) => current + 1)}
+      />
+
+      <HostKeyTrustDialog
+        open={hostKeyTrustOpen}
+        payload={hostKeyTrustPayload}
+        onOpenChange={setHostKeyTrustOpen}
+        onTrusted={() => {
+          void (async () => {
+            if (!hostKeyRetryRef.current) return;
+            const result = await hostKeyRetryRef.current();
+            if (!result.success) {
+              toast.error(t('app.connectionFailed'), {
+                description: result.error,
+              });
+            }
+          })();
+        }}
       />
 
       <Toaster richColors position="top-right" />

@@ -1,6 +1,7 @@
 mod commands;
 mod connection_manager;
 mod credential_store;
+mod known_hosts;
 mod ftp_client;
 mod local_shell;
 mod os_detect;
@@ -315,6 +316,9 @@ pub fn run() {
             commands::store_connection_secret,
             commands::get_connection_secret,
             commands::delete_connection_secrets,
+            commands::validate_private_key_path,
+            commands::read_private_key_file_command,
+            commands::trust_host_key,
             // Note: PTY terminal I/O now uses WebSocket instead of IPC
             // WebSocket server runs on a dynamically assigned port (9001-9010)
         ])

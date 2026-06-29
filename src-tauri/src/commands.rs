@@ -16,8 +16,9 @@ pub struct ConnectRequest {
     pub username: String,
     pub auth_method: String,
     pub password: Option<String>,
-    pub key_path: Option<String>,
+    pub key_content: Option<String>,
     pub passphrase: Option<String>,
+    pub host_key_verification: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,7 +64,7 @@ pub async fn ssh_connect(
             password: request.password.ok_or("Password required")?,
         },
         "publickey" => AuthMethod::PublicKey {
-            key_path: request.key_path.ok_or("Key path required")?,
+            key_content: request.key_content.ok_or("Private key content required")?,
             passphrase: request.passphrase,
         },
         _ => return Err("Invalid auth method".to_string()),
@@ -74,6 +75,7 @@ pub async fn ssh_connect(
         port: request.port,
         username: request.username,
         auth_method,
+        host_key_verification: request.host_key_verification.unwrap_or(true),
     };
 
     match state
@@ -2211,8 +2213,9 @@ pub struct SftpConnectRequest {
     pub username: String,
     pub auth_method: String,
     pub password: Option<String>,
-    pub key_path: Option<String>,
+    pub key_content: Option<String>,
     pub passphrase: Option<String>,
+    pub host_key_verification: Option<bool>,
 }
 
 #[tauri::command]
@@ -2225,7 +2228,7 @@ pub async fn sftp_connect(
             password: request.password.unwrap_or_default(),
         },
         "publickey" => SftpAuthMethod::PublicKey {
-            key_path: request.key_path.ok_or("Key path required for SFTP")?,
+            key_content: request.key_content.ok_or("Private key content required for SFTP")?,
             passphrase: request.passphrase,
         },
         _ => return Err("Invalid SFTP auth method".to_string()),
@@ -2236,6 +2239,7 @@ pub async fn sftp_connect(
         port: request.port,
         username: request.username,
         auth_method: auth,
+        host_key_verification: request.host_key_verification.unwrap_or(true),
     };
 
     match state
@@ -3140,6 +3144,83 @@ fn matches_exclude(name: &str, patterns: &[String]) -> bool {
         }
     }
     false
+}
+
+// ========== Private Key Helpers ==========
+
+#[derive(Debug, Serialize)]
+pub struct ValidatePrivateKeyPathResponse {
+    pub valid: bool,
+    pub warning: Option<String>,
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+pub fn validate_private_key_path(path: String) -> ValidatePrivateKeyPathResponse {
+    use crate::ssh::{key_file_permission_warning, read_private_key_file};
+
+    match read_private_key_file(&path) {
+        Ok(content) => {
+            if let Err(e) = crate::ssh::load_private_key_from_content(&content, None) {
+                // Key may be encrypted — still valid path if file reads OK
+                let msg = e.to_string();
+                if msg.contains("passphrase") || msg.contains("encrypted") {
+                    ValidatePrivateKeyPathResponse {
+                        valid: true,
+                        warning: key_file_permission_warning(&path),
+                        error: None,
+                    }
+                } else {
+                    ValidatePrivateKeyPathResponse {
+                        valid: false,
+                        warning: None,
+                        error: Some(msg),
+                    }
+                }
+            } else {
+                ValidatePrivateKeyPathResponse {
+                    valid: true,
+                    warning: key_file_permission_warning(&path),
+                    error: None,
+                }
+            }
+        }
+        Err(e) => ValidatePrivateKeyPathResponse {
+            valid: false,
+            warning: None,
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+#[tauri::command]
+pub fn read_private_key_file_command(path: String) -> Result<String, String> {
+    crate::ssh::read_private_key_file(&path).map_err(|e| e.to_string())
+}
+
+// ========== Host Key Trust ==========
+
+#[derive(Debug, Deserialize)]
+pub struct TrustHostKeyRequest {
+    pub host: String,
+    pub port: u16,
+    pub key_type: String,
+    pub key_data: String,
+}
+
+#[tauri::command]
+pub fn trust_host_key(request: TrustHostKeyRequest) -> Result<(), String> {
+    use crate::known_hosts::trust_host_key_entry;
+    use russh_keys::parse_public_key_base64;
+
+    parse_public_key_base64(&request.key_data).map_err(|e| e.to_string())?;
+    trust_host_key_entry(
+        &request.host,
+        request.port,
+        &request.key_type,
+        &request.key_data,
+    )
+    .map_err(|e| e.to_string())
 }
 
 // ========== Credential Storage (macOS Keychain) ==========

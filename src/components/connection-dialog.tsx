@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
+import { open as tauriOpen } from '@tauri-apps/plugin-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -12,22 +13,40 @@ import { Switch } from './ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 
 import { Separator } from './ui/separator';
-import { ConnectionProfileManager, type ConnectionProfile } from '../lib/connection-profiles';
+import { Textarea } from './ui/textarea';
 import {
   ConnectionStorageManager,
   saveConnectionWithCredentials,
   updateConnectionWithCredentials,
 } from '../lib/connection-storage';
 import { loadConnectionSecrets } from '../lib/credential-storage';
+import {
+  isValidPrivateKeyPem,
+  resolvePrivateKeyContent,
+  resolvePrivateKeyForStorage,
+  type PrivateKeySource,
+} from '../lib/resolve-private-key';
+import {
+  isUnknownHostKeyError,
+  parseUnknownHostKeyError,
+  type UnknownHostKeyPayload,
+} from '../lib/host-key-verification';
+import {
+  sshConnectWithHostKeyTrust,
+  type ConnectResponse,
+  type HostKeyTrustRequest,
+} from '../lib/ssh-connect';
+import { HostKeyTrustDialog } from './host-key-trust-dialog';
 import { toast } from 'sonner';
 import {
   Server,
   Shield,
-
+  FolderOpen,
   Network,
   Terminal as TerminalIcon,
 } from 'lucide-react';
 import { getDefaultPort, getAuthMethods, getHiddenFields } from '@/lib/protocol-config';
+import { cn } from '@/lib/utils';
 
 interface ConnectionDialogProps {
   open: boolean;
@@ -45,7 +64,9 @@ export interface ConnectionConfig {
   username: string;
   authMethod: 'password' | 'publickey' | 'keyboard-interactive' | 'anonymous';
   password?: string;
+  privateKeySource?: PrivateKeySource;
   privateKeyPath?: string;
+  privateKeyContent?: string;
   passphrase?: string;
 
   // Advanced options
@@ -79,7 +100,9 @@ export function ConnectionDialog({
     username: '',
     authMethod: 'password',
     password: '',
+    privateKeySource: 'path',
     privateKeyPath: '',
+    privateKeyContent: '',
     passphrase: '',
     proxyType: 'none',
     proxyHost: '',
@@ -96,8 +119,6 @@ export function ConnectionDialog({
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [_savedProfiles, setSavedProfiles] = useState<ConnectionProfile[]>([]);
-  const [_showSaveProfile, setShowSaveProfile] = useState(false);
   const [saveAsConnection, setSaveAsConnection] = useState(true);
   const [rememberPassword, setRememberPassword] = useState(true);
   const { t } = useTranslation();
@@ -105,14 +126,133 @@ export function ConnectionDialog({
   const [availableFolders, setAvailableFolders] = useState<string[]>([]);
   const connectionIdRef = useRef<string | null>(null);
   const cancelRequestedRef = useRef(false);
+  const hostKeyRetryRef = useRef<(() => Promise<ConnectResponse>) | null>(null);
+  const pendingSshConnectRef = useRef<{
+    connectionId: string;
+    resolvedKeyContent?: string;
+    connectionMeta: {
+      privateKeySource: PrivateKeySource;
+      privateKeyPath?: string;
+      hasStoredPrivateKey: boolean;
+    };
+    credentialSecrets: {
+      password?: string;
+      passphrase?: string;
+      privateKey?: string;
+    };
+  } | null>(null);
+  const [hostKeyTrustOpen, setHostKeyTrustOpen] = useState(false);
+  const [hostKeyTrustPayload, setHostKeyTrustPayload] = useState<UnknownHostKeyPayload | null>(null);
+  const [activeTab, setActiveTab] = useState('connection');
+
+  const onHostKeyTrustRequired = (request: HostKeyTrustRequest) => {
+    setHostKeyTrustPayload(request.payload);
+    hostKeyRetryRef.current = request.retry;
+    setHostKeyTrustOpen(true);
+  };
+
+  const completeSuccessfulConnect = async (
+    connectionId: string,
+    resolvedKeyContent: string | undefined,
+    connectionMeta: {
+      privateKeySource: PrivateKeySource;
+      privateKeyPath?: string;
+      hasStoredPrivateKey: boolean;
+    },
+    credentialSecrets: {
+      password?: string;
+      passphrase?: string;
+      privateKey?: string;
+    },
+  ) => {
+    if (editingConnection?.id) {
+      await updateConnectionWithCredentials(
+        editingConnection.id,
+        {
+          name: config.name,
+          host: config.host,
+          port: config.port || 22,
+          username: config.username,
+          protocol: config.protocol,
+          authMethod: config.authMethod,
+          ...connectionMeta,
+          lastConnected: new Date().toISOString(),
+        },
+        credentialSecrets,
+        {
+          rememberPassword,
+        },
+      );
+    } else if (saveAsConnection) {
+      await saveConnectionWithCredentials(connectionId, {
+        name: config.name,
+        host: config.host,
+        port: config.port || 22,
+        username: config.username,
+        protocol: config.protocol,
+        folder: connectionFolder,
+        authMethod: config.authMethod,
+        ...connectionMeta,
+      }, credentialSecrets, {
+        rememberPassword,
+      });
+    }
+
+    onConnect({
+      ...config,
+      id: connectionId,
+      privateKeyContent: resolvedKeyContent,
+      ...connectionMeta,
+    });
+    onOpenChange(false);
+
+    if (!editingConnection) {
+      setConfig(defaultConfig);
+    }
+  };
+
+  const handleHostKeyTrustRetry = async () => {
+    const pending = pendingSshConnectRef.current;
+    if (!hostKeyRetryRef.current || !pending) {
+      return;
+    }
+
+    const result = await hostKeyRetryRef.current();
+    if (result.success) {
+      await completeSuccessfulConnect(
+        pending.connectionId,
+        pending.resolvedKeyContent,
+        pending.connectionMeta,
+        pending.credentialSecrets,
+      );
+      pendingSshConnectRef.current = null;
+      resetConnectionState();
+      return;
+    }
+
+    if (result.pendingHostKeyTrust || isUnknownHostKeyError(result.error ?? '')) {
+      const payload = result.error ? parseUnknownHostKeyError(result.error) : null;
+      if (payload) {
+        onHostKeyTrustRequired({ payload, retry: hostKeyRetryRef.current });
+      }
+      return;
+    }
+
+    console.error('Connection failed after host key trust:', result.error);
+    toast.error(t('connectionDialog.toast.connectionFailed'), {
+      description: result.error || t('connectionDialog.toast.connectionFailedDesc'),
+      duration: 5000,
+    });
+    pendingSshConnectRef.current = null;
+    resetConnectionState();
+  };
 
   // Reset connection state and load saved profiles when dialog opens/closes
   useEffect(() => {
     if (open) {
       // Reset connection state when dialog opens
       resetConnectionState();
-
-      setSavedProfiles(ConnectionProfileManager.getProfiles());
+      setActiveTab('connection');
 
       // Load only valid folders from connection manager (excludes orphaned/deleted folders)
       const folders = ConnectionStorageManager.getValidFolders();
@@ -121,12 +261,20 @@ export function ConnectionDialog({
 
       // Load editing connection data into config when dialog opens
       if (editingConnection) {
-        const { password: _password, passphrase: _passphrase, ...connectionWithoutSecrets } = editingConnection;
+        const {
+          password: _password,
+          passphrase: _passphrase,
+          privateKeyContent: _privateKeyContent,
+          ...connectionWithoutSecrets
+        } = editingConnection;
         setConfig({
           ...defaultConfig,
           ...connectionWithoutSecrets,
           password: '',
           passphrase: '',
+          privateKeyContent: '',
+          privateKeySource: editingConnection.privateKeySource
+            ?? (editingConnection.privateKeyPath ? 'path' : 'paste'),
         });
         // When editing, don't show "save as connection" since it already exists
         setSaveAsConnection(false);
@@ -134,7 +282,11 @@ export function ConnectionDialog({
         const storedConnection = editingConnection.id
           ? ConnectionStorageManager.getConnection(editingConnection.id)
           : undefined;
-        setRememberPassword(!!storedConnection?.hasStoredPassword || !!storedConnection?.hasStoredPassphrase);
+        setRememberPassword(
+          !!storedConnection?.hasStoredPassword
+            || !!storedConnection?.hasStoredPassphrase
+            || !!storedConnection?.hasStoredPrivateKey,
+        );
       } else {
         // Reset to defaults for new connection
         setConfig(defaultConfig);
@@ -147,51 +299,15 @@ export function ConnectionDialog({
     }
   }, [open, editingConnection]);
 
-  const _handleSaveProfile = () => {
-    try {
-      const profile = ConnectionProfileManager.saveProfile({
-        name: config.name,
-        host: config.host,
-        port: config.port,
-        username: config.username,
-        authMethod: config.authMethod === 'publickey' ? 'key' : 'password',
-        password: config.password,
-        privateKey: config.privateKeyPath,
-      });
-      setSavedProfiles(ConnectionProfileManager.getProfiles());
-      toast.success(t('connectionDialog.toast.savedProfile', { name: profile.name }));
-      setShowSaveProfile(false);
-    } catch (_error) {
-      toast.error(t('connectionDialog.toast.failedToSaveProfile'));
-    }
-  };
-
-  const _handleLoadProfile = (profile: ConnectionProfile) => {
-    setConfig({
-      ...config,
-      name: profile.name,
-      host: profile.host,
-      port: profile.port,
-      username: profile.username,
-      authMethod: profile.authMethod === 'key' ? 'publickey' : 'password',
-      password: profile.password,
-      privateKeyPath: profile.privateKey,
+  const handleBrowsePrivateKey = async () => {
+    const selected = await tauriOpen({
+      multiple: false,
+      directory: false,
+      title: t('connectionDialog.label.privateKey'),
     });
-    toast.success(t('connectionDialog.toast.loadedProfile', { name: profile.name }));
-  };
 
-  const _handleDeleteProfile = (id: string) => {
-    if (ConnectionProfileManager.deleteProfile(id)) {
-      setSavedProfiles(ConnectionProfileManager.getProfiles());
-      toast.success(t('connectionDialog.toast.profileDeleted'));
-    }
-  };
-
-  const _handleToggleFavorite = (id: string) => {
-    const profile = ConnectionProfileManager.getProfile(id);
-    if (profile) {
-      ConnectionProfileManager.updateProfile(id, { favorite: !profile.favorite });
-      setSavedProfiles(ConnectionProfileManager.getProfiles());
+    if (typeof selected === 'string') {
+      updateConfig({ privateKeyPath: selected, privateKeySource: 'path' });
     }
   };
 
@@ -220,10 +336,13 @@ export function ConnectionDialog({
       ? await loadConnectionSecrets(editingConnection.id, {
           hasStoredPassword: storedConnection?.hasStoredPassword,
           hasStoredPassphrase: storedConnection?.hasStoredPassphrase,
+          hasStoredPrivateKey: storedConnection?.hasStoredPrivateKey,
         })
       : {};
     const resolvedPassword = config.password || storedSecrets.password || '';
     const resolvedPassphrase = config.passphrase || storedSecrets.passphrase || '';
+    const privateKeySource = config.privateKeySource ?? 'path';
+    const hasStoredPrivateKey = !!storedConnection?.hasStoredPrivateKey;
 
     // Basic validation — anonymous FTP doesn't require a username
     const requiresUsername = config.authMethod !== 'anonymous';
@@ -246,13 +365,116 @@ export function ConnectionDialog({
       return;
     }
 
-    if (config.authMethod === 'publickey' && !config.privateKeyPath) {
-      toast.error(t('connectionDialog.toast.privateKeyRequired'), {
-        description: t('connectionDialog.toast.privateKeyRequiredDesc'),
-      });
-      resetConnectionState();
-      return;
+    if (config.authMethod === 'publickey') {
+      if (privateKeySource === 'path' && !config.privateKeyPath?.trim()) {
+        toast.error(t('connectionDialog.toast.privateKeyRequired'), {
+          description: t('connectionDialog.toast.privateKeyRequiredDesc'),
+        });
+        resetConnectionState();
+        return;
+      }
+
+      if (privateKeySource === 'paste' && !config.privateKeyContent?.trim() && !hasStoredPrivateKey) {
+        toast.error(t('connectionDialog.toast.privateKeyRequired'), {
+          description: t('connectionDialog.toast.privateKeyRequiredDesc'),
+        });
+        resetConnectionState();
+        return;
+      }
+
+      if (privateKeySource === 'paste' && config.privateKeyContent?.trim() && !isValidPrivateKeyPem(config.privateKeyContent)) {
+        toast.error(t('connectionDialog.toast.invalidPrivateKeyPem'), {
+          description: t('connectionDialog.toast.invalidPrivateKeyPemDesc'),
+        });
+        resetConnectionState();
+        return;
+      }
+
+      if (privateKeySource === 'path' && config.privateKeyPath?.trim()) {
+        const validation = await invoke<{
+          valid: boolean;
+          warning?: string;
+          error?: string;
+        }>('validate_private_key_path', { path: config.privateKeyPath.trim() });
+
+        if (!validation.valid) {
+          toast.error(t('connectionDialog.toast.privateKeyPathInvalid'), {
+            description: validation.error,
+          });
+          resetConnectionState();
+          return;
+        }
+
+        if (validation.warning) {
+          toast.warning(t('connectionDialog.toast.privateKeyPathWarning'), {
+            description: t('connectionDialog.toast.privateKeyPathWarningDesc', {
+              warning: validation.warning,
+            }),
+          });
+        }
+      }
     }
+
+    let resolvedKeyContent: string | undefined;
+    if (config.authMethod === 'publickey') {
+      try {
+        resolvedKeyContent = await resolvePrivateKeyContent({
+          privateKeySource,
+          privateKeyPath: config.privateKeyPath,
+          privateKeyContent: config.privateKeyContent,
+          hasStoredPrivateKey,
+          storedPrivateKey: storedSecrets.privateKey,
+        });
+      } catch (error) {
+        toast.error(t('connectionDialog.toast.privateKeyPathInvalid'), {
+          description: error instanceof Error ? error.message : String(error),
+        });
+        resetConnectionState();
+        return;
+      }
+
+      if (!resolvedKeyContent) {
+        toast.error(t('connectionDialog.toast.privateKeyRequired'), {
+          description: t('connectionDialog.toast.privateKeyRequiredDesc'),
+        });
+        resetConnectionState();
+        return;
+      }
+    }
+
+    let privateKeyForStorage: string | undefined;
+    if (config.authMethod === 'publickey' && rememberPassword) {
+      try {
+        privateKeyForStorage = await resolvePrivateKeyForStorage(
+          {
+            privateKeySource,
+            privateKeyPath: config.privateKeyPath,
+            privateKeyContent: config.privateKeyContent,
+            hasStoredPrivateKey,
+            storedPrivateKey: storedSecrets.privateKey,
+          },
+          rememberPassword,
+        );
+      } catch (error) {
+        toast.error(t('connectionDialog.toast.privateKeyPathInvalid'), {
+          description: error instanceof Error ? error.message : String(error),
+        });
+        resetConnectionState();
+        return;
+      }
+    }
+
+    const connectionMeta = {
+      privateKeySource,
+      privateKeyPath: privateKeySource === 'path' ? config.privateKeyPath : undefined,
+      hasStoredPrivateKey: rememberPassword && !!privateKeyForStorage,
+    };
+
+    const credentialSecrets = {
+      password: config.password || undefined,
+      passphrase: config.passphrase || undefined,
+      privateKey: privateKeyForStorage,
+    };
 
     // For SFTP/FTP protocols, delegate connection to App.tsx (via onConnect)
     // which calls the appropriate Tauri commands.
@@ -271,14 +493,11 @@ export function ConnectionDialog({
               username: config.username,
               protocol: config.protocol,
               authMethod: config.authMethod,
-              privateKeyPath: config.privateKeyPath,
+              ...connectionMeta,
               ftpsEnabled: config.ftpsEnabled,
               lastConnected: new Date().toISOString(),
             },
-            {
-              password: config.password || undefined,
-              passphrase: config.passphrase || undefined,
-            },
+            credentialSecrets,
             {
               rememberPassword,
             },
@@ -292,12 +511,9 @@ export function ConnectionDialog({
             protocol: config.protocol,
             folder: connectionFolder,
             authMethod: config.authMethod,
-            privateKeyPath: config.privateKeyPath,
+            ...connectionMeta,
             ftpsEnabled: config.ftpsEnabled,
-          }, {
-            password: config.password || undefined,
-            passphrase: config.passphrase || undefined,
-          }, {
+          }, credentialSecrets, {
             rememberPassword,
           });
         }
@@ -308,6 +524,8 @@ export function ConnectionDialog({
           id: connectionId,
           password: resolvedPassword || undefined,
           passphrase: resolvedPassphrase || undefined,
+          privateKeyContent: resolvedKeyContent,
+          ...connectionMeta,
         });
         onOpenChange(false);
 
@@ -321,76 +539,40 @@ export function ConnectionDialog({
     }
 
     // SSH — connect via ssh_connect
+    pendingSshConnectRef.current = {
+      connectionId,
+      resolvedKeyContent,
+      connectionMeta,
+      credentialSecrets,
+    };
+
+    let awaitingHostKeyTrust = false;
     try {
-      const result = await invoke<{ success: boolean; error?: string }>(
-        'ssh_connect',
+      const result = await sshConnectWithHostKeyTrust(
         {
-          request: {
-            connection_id: connectionId,
-            host: config.host,
-            port: config.port || 22,
-            username: config.username,
-            auth_method: config.authMethod || 'password',
-            password: resolvedPassword,
-            key_path: config.privateKeyPath || null,
-            passphrase: resolvedPassphrase || null,
-          }
-        }
+          connection_id: connectionId,
+          host: config.host,
+          port: config.port || 22,
+          username: config.username,
+          auth_method: config.authMethod || 'password',
+          password: resolvedPassword,
+          key_content: resolvedKeyContent || null,
+          passphrase: resolvedPassphrase || null,
+        },
+        onHostKeyTrustRequired,
       );
 
       if (result.success) {
-        // Save or update connection based on whether we're editing or creating new
-        if (editingConnection?.id) {
-          await updateConnectionWithCredentials(
-            editingConnection.id,
-            {
-              name: config.name,
-              host: config.host,
-              port: config.port || 22,
-              username: config.username,
-              protocol: config.protocol,
-              authMethod: config.authMethod,
-              privateKeyPath: config.privateKeyPath,
-              lastConnected: new Date().toISOString(),
-            },
-            {
-              password: config.password || undefined,
-              passphrase: config.passphrase || undefined,
-            },
-            {
-              rememberPassword,
-            },
-          );
-        } else if (saveAsConnection) {
-          await saveConnectionWithCredentials(connectionId, {
-            name: config.name,
-            host: config.host,
-            port: config.port || 22,
-            username: config.username,
-            protocol: config.protocol,
-            folder: connectionFolder,
-            authMethod: config.authMethod,
-            privateKeyPath: config.privateKeyPath,
-          }, {
-            password: config.password || undefined,
-            passphrase: config.passphrase || undefined,
-          }, {
-            rememberPassword,
-          });
-        }
-
-        onConnect({
-          ...config,
-          id: connectionId
-        });
-        onOpenChange(false);
-
-        // Reset form if creating new connection
-        if (!editingConnection) {
-          setConfig(defaultConfig);
-        }
+        await completeSuccessfulConnect(
+          connectionId,
+          resolvedKeyContent,
+          connectionMeta,
+          credentialSecrets,
+        );
+        pendingSshConnectRef.current = null;
+      } else if (result.pendingHostKeyTrust || isUnknownHostKeyError(result.error ?? '')) {
+        awaitingHostKeyTrust = true;
       } else {
-        // Show error toast
         console.error('Connection failed:', result.error);
         if (cancelRequestedRef.current && result.error?.toLowerCase().includes('cancelled')) {
           toast.info(t('connectionDialog.toast.connectionCancelled'));
@@ -400,9 +582,11 @@ export function ConnectionDialog({
             duration: 5000,
           });
         }
+        pendingSshConnectRef.current = null;
       }
     } catch (error) {
       console.error('Connection error:', error);
+      pendingSshConnectRef.current = null;
       if (cancelRequestedRef.current) {
         toast.info(t('connectionDialog.toast.connectionCancelled'));
       } else {
@@ -412,7 +596,9 @@ export function ConnectionDialog({
         });
       }
     } finally {
-      resetConnectionState();
+      if (!awaitingHostKeyTrust) {
+        resetConnectionState();
+      }
     }
   };
 
@@ -470,10 +656,19 @@ export function ConnectionDialog({
     onOpenChange(newOpen);
   };
 
+  const tabContentClassName = 'px-6 py-4 space-y-4 mt-0 overflow-y-auto';
+
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[900px] h-[680px] max-w-[90vw] max-h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+      <DialogContent
+        className={cn(
+          '!top-0 !left-0 !translate-x-0 !translate-y-0 !inset-0 !m-auto',
+          '!flex !flex-col !w-full sm:!max-w-4xl',
+          '!max-h-[85vh] overflow-hidden p-0 gap-0 min-w-0 !h-fit',
+        )}
+      >
+        <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Server className="h-5 w-5 text-primary" />
@@ -487,8 +682,12 @@ export function ConnectionDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="connection" className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 px-4 overflow-x-auto">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="flex flex-col overflow-hidden shrink-0"
+        >
+          <TabsList className="shrink-0 w-full justify-start rounded-none border-b bg-transparent h-auto p-0 px-4 overflow-x-auto">
             <TabsTrigger
               value="connection"
               className="flex items-center gap-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-2.5 py-2.5 text-sm whitespace-nowrap"
@@ -519,7 +718,7 @@ export function ConnectionDialog({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="connection" className="flex-1 overflow-y-auto px-6 py-4 space-y-4 mt-0">
+          <TabsContent value="connection" className={tabContentClassName}>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -602,7 +801,7 @@ export function ConnectionDialog({
             </Card>
           </TabsContent>
 
-          <TabsContent value="authentication" className="flex-1 overflow-y-auto px-6 py-4 space-y-4 mt-0">
+          <TabsContent value="authentication" className={tabContentClassName}>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -651,18 +850,61 @@ export function ConnectionDialog({
 
                 {config.authMethod === 'publickey' && (
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="private-key">{t('connectionDialog.label.privateKey')}</Label>
-                      <Input
-                        id="private-key"
-                        placeholder={t('connectionDialog.placeholder.privateKey')}
-                        value={config.privateKeyPath}
-                        onChange={(e) => updateConfig({ privateKeyPath: e.target.value })}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {t('connectionDialog.placeholder.privateKey')}
-                      </p>
-                    </div>
+                    <Tabs
+                      value={config.privateKeySource ?? 'path'}
+                      onValueChange={(value) => updateConfig({ privateKeySource: value as PrivateKeySource })}
+                    >
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="path">{t('connectionDialog.privateKey.tabPath')}</TabsTrigger>
+                        <TabsTrigger value="paste">{t('connectionDialog.privateKey.tabPaste')}</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="path" className="space-y-2 mt-3">
+                        <Label htmlFor="private-key">{t('connectionDialog.label.privateKey')}</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="private-key"
+                            placeholder={t('connectionDialog.placeholder.privateKey')}
+                            value={config.privateKeyPath ?? ''}
+                            onChange={(e) => updateConfig({
+                              privateKeyPath: e.target.value,
+                              privateKeySource: 'path',
+                            })}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => { void handleBrowsePrivateKey(); }}
+                          >
+                            <FolderOpen className="h-4 w-4 mr-1" />
+                            {t('connectionDialog.privateKey.browse')}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t('connectionDialog.privateKey.pathHint')}
+                        </p>
+                      </TabsContent>
+                      <TabsContent value="paste" className="space-y-2 mt-3">
+                        <Label htmlFor="private-key-paste">{t('connectionDialog.privateKey.tabPaste')}</Label>
+                        {editingConnection?.id
+                          && ConnectionStorageManager.getConnection(editingConnection.id)?.hasStoredPrivateKey
+                          && !config.privateKeyContent ? (
+                          <p className="text-sm text-muted-foreground rounded-md border px-3 py-2">
+                            {t('connectionDialog.privateKey.storedSecurely')}
+                          </p>
+                        ) : (
+                          <Textarea
+                            id="private-key-paste"
+                            className="font-mono text-xs min-h-[120px]"
+                            placeholder={t('connectionDialog.privateKey.pastePlaceholder')}
+                            value={config.privateKeyContent ?? ''}
+                            onChange={(e) => updateConfig({
+                              privateKeyContent: e.target.value,
+                              privateKeySource: 'paste',
+                            })}
+                          />
+                        )}
+                      </TabsContent>
+                    </Tabs>
                     <div className="space-y-2">
                       <Label htmlFor="passphrase">{t('connectionDialog.label.passphrase')}</Label>
                       <Input
@@ -699,7 +941,7 @@ export function ConnectionDialog({
             </Card>
           </TabsContent>
 
-          <TabsContent value="proxy" className="flex-1 overflow-y-auto px-6 py-4 space-y-4 mt-0">
+          <TabsContent value="proxy" className={tabContentClassName}>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -778,7 +1020,7 @@ export function ConnectionDialog({
             </Card>
           </TabsContent>
 
-          <TabsContent value="advanced" className="flex-1 overflow-y-auto px-6 py-4 space-y-4 mt-0">
+          <TabsContent value="advanced" className={tabContentClassName}>
             {(() => {
               const hiddenFields = getHiddenFields(config.protocol);
               const isCompHidden = hiddenFields.includes('compression');
@@ -880,7 +1122,7 @@ export function ConnectionDialog({
 
         </Tabs>
 
-        <DialogFooter className="px-6 py-4 border-t bg-muted/30 flex-col sm:flex-col">
+        <DialogFooter className="shrink-0 px-6 py-4 border-t bg-muted/30 flex-col sm:flex-col">
           <div className="flex flex-col gap-3 w-full">
             {/* Save as Connection Option - Only show for new connections */}
             {!editingConnection && (
@@ -949,5 +1191,24 @@ export function ConnectionDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <HostKeyTrustDialog
+      open={hostKeyTrustOpen}
+      payload={hostKeyTrustPayload}
+      onOpenChange={setHostKeyTrustOpen}
+      onTrusted={() => {
+        void handleHostKeyTrustRetry();
+      }}
+      onTrustFailed={(message) => {
+        toast.error(t('hostKeyTrust.trustFailed'), {
+          description: message,
+          duration: 5000,
+        });
+      }}
+      onCancelled={() => {
+        pendingSshConnectRef.current = null;
+        resetConnectionState();
+      }}
+    />
+  </>
   );
 }

@@ -153,6 +153,14 @@
     },
     "saveAsConnection": "Save as persistent connection",
     "rememberPassword": "Remember Password",
+    "privateKey": {
+      "tabPath": "File Path",
+      "tabPaste": "Paste Key",
+      "browse": "Browse…",
+      "pastePlaceholder": "Paste your PEM or OpenSSH private key here",
+      "storedSecurely": "Private key stored securely in Keychain",
+      "pathHint": "The key file will be copied to Keychain when saved"
+    },
     "selectFolder": "Select folder",
     "allConnections": "All Connections",
     "button": {
@@ -170,7 +178,12 @@
       "passwordRequired": "Password Required",
       "passwordRequiredDesc": "Please enter a password for password authentication.",
       "privateKeyRequired": "Private Key Required",
-      "privateKeyRequiredDesc": "Please select or enter the path to your SSH private key file.",
+      "privateKeyRequiredDesc": "Please provide a private key file path or paste your key content.",
+      "invalidPrivateKeyPem": "Invalid Private Key",
+      "invalidPrivateKeyPemDesc": "The pasted content does not look like a valid SSH private key.",
+      "privateKeyPathInvalid": "Private Key File Invalid",
+      "privateKeyPathWarning": "Private Key Permissions",
+      "privateKeyPathWarningDesc": "{{warning}}",
       "profileSaved": "Saved profile: {{name}}",
       "savedProfile": "Saved profile: {{name}}",
       "loadedProfile": "Loaded profile: {{name}}",
@@ -617,6 +630,13 @@
     "itemsTransferred_one": "{{count}} item transferred",
     "itemsTransferred_other": "{{count}} items transferred",
     "calculating": "Calculating size..."
+  },
+  "hostKeyTrust": {
+    "title": "Unknown Host Key",
+    "description": "The host {{host}}:{{port}} is not in your known hosts. Do you trust this host key?",
+    "trustAndConnect": "Trust and Connect",
+    "trusting": "Trusting...",
+    "trustFailed": "Failed to trust host key"
   },
   "connectionManager": {
     "title": "Connection Manager",

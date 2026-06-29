@@ -6,7 +6,9 @@ const TEST_HOST = 'localhost'; // Replace with your test SSH server
 const TEST_USERNAME = 'testuser'; // Replace with your test username
 const TEST_PASSWORD = 'testpass'; // Replace with your test password
 
-describe('SSH Connection Tests', () => {
+const isTauriRuntime = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+describe.skipIf(!isTauriRuntime)('SSH Connection Tests', () => {
   let connectionId: string;
 
   beforeAll(() => {
@@ -35,7 +37,7 @@ describe('SSH Connection Tests', () => {
           username: TEST_USERNAME,
           auth_method: 'password',
           password: TEST_PASSWORD,
-          key_path: null,
+          key_content: null,
           passphrase: null,
         }
       }
@@ -136,7 +138,7 @@ describe('SSH Connection Tests', () => {
           username: TEST_USERNAME,
           auth_method: 'password',
           password: 'wrongpassword',
-          key_path: null,
+          key_content: null,
           passphrase: null,
         }
       }

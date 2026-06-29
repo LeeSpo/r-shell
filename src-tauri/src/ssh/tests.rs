@@ -18,6 +18,7 @@ mod tests {
             auth_method: AuthMethod::Password {
                 password: TEST_PASSWORD.to_string(),
             },
+            host_key_verification: false,
         }
     }
 
@@ -95,6 +96,7 @@ mod tests {
             auth_method: AuthMethod::Password {
                 password: "wrongpassword".to_string(),
             },
+            host_key_verification: false,
         };
 
         let result = client_write.connect(&config).await;
@@ -235,7 +237,7 @@ mod key_loading_tests {
     // ── 4. Missing key file returns a clear error ─────────────────────────────
 
     #[tokio::test]
-    async fn test_connect_missing_key_file_returns_error() {
+    async fn test_connect_invalid_key_content_returns_error() {
         use crate::ssh::{AuthMethod, SshClient, SshConfig};
 
         let config = SshConfig {
@@ -243,17 +245,20 @@ mod key_loading_tests {
             port: 22,
             username: "user".to_string(),
             auth_method: AuthMethod::PublicKey {
-                key_path: "/nonexistent/path/id_rsa".to_string(),
+                key_content: "not-a-valid-private-key".to_string(),
                 passphrase: None,
             },
+            host_key_verification: false,
         };
 
         let mut client = SshClient::new();
         let err = client.connect(&config).await.unwrap_err();
         let msg = err.to_string();
         assert!(
-            msg.contains("not found") || msg.contains("SSH key file") || msg.contains("Connection refused"),
-            "Error should mention the missing file, got: {msg}"
+            msg.contains("Failed to load SSH private key")
+                || msg.contains("Connection refused")
+                || msg.contains("timed out"),
+            "Error should mention invalid key or connection failure, got: {msg}"
         );
     }
 
@@ -321,13 +326,5 @@ mod key_loading_tests {
 
     /// Replication of the tilde-expansion logic from `SshClient::connect` so it
     /// can be tested independently without constructing a full `SshConfig`.
-    fn expand_tilde(key_path: &str) -> String {
-        if key_path.starts_with("~/") || key_path.starts_with("~\\") {
-            if let Some(home) = dirs::home_dir() {
-                let home_str = home.to_string_lossy();
-                return key_path.replacen('~', &home_str, 1);
-            }
-        }
-        key_path.to_string()
-    }
+    use crate::ssh::key_loader::expand_tilde;
 }
