@@ -2,6 +2,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { PtyTerminal } from '../components/pty-terminal';
+import { TerminalInputProvider } from '../lib/terminal-input-context';
 
 const mocks = vi.hoisted(() => {
   const terminals: Array<any> = [];
@@ -159,13 +160,15 @@ vi.mock('sonner', () => ({
 
 function renderTerminal() {
   return render(
-    <PtyTerminal
-      connectionId="connection-1"
-      connectionName="SSH Server"
-      host="127.0.0.1"
-      username="root"
-      isActive
-    />,
+    <TerminalInputProvider>
+      <PtyTerminal
+        connectionId="connection-1"
+        connectionName="SSH Server"
+        host="127.0.0.1"
+        username="root"
+        isActive
+      />
+    </TerminalInputProvider>,
   );
 }
 

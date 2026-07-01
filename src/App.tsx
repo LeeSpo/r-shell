@@ -10,6 +10,8 @@ import { StatusBar } from './components/status-bar';
 import { ConnectionDialog, ConnectionConfig } from './components/connection-dialog';
 import { SettingsModal } from './components/settings-modal';
 import { IntegratedFileBrowser } from './components/integrated-file-browser';
+import { ComposePane } from './components/compose-pane';
+import { TerminalInputProvider } from './lib/terminal-input-context';
 import { WelcomeScreen } from './components/welcome-screen';
 import { UpdateChecker } from './components/update-checker';
 import {
@@ -79,6 +81,7 @@ function AppContent() {
 
   // Right sidebar tab & log monitor integration
   const [rightSidebarTab, setRightSidebarTab] = useState("monitor");
+  const [bottomPanelTab, setBottomPanelTab] = useState<'file-browser' | 'compose'>('file-browser');
   const [externalLogPath, setExternalLogPath] = useState<string | undefined>();
   const [externalLogPathKey, setExternalLogPathKey] = useState(0);
 
@@ -1200,7 +1203,10 @@ function AppContent() {
   // Editor tabs are standalone — hide extra panels like file-browser tabs
   const isEditorTab = activeTab?.tabType === 'editor';
   const isLocalTab = activeTab?.protocol === 'Local';
-  const hideExtraPanels = isFileBrowserTab || isEditorTab || isLocalTab;
+  const hideRightPanels = isFileBrowserTab || isEditorTab || isLocalTab;
+  const hideBottomPanels = isFileBrowserTab || isEditorTab;
+  const showBottomPanelToggle = !hideBottomPanels;
+  const showRightPanelToggle = !hideRightPanels;
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -1213,9 +1219,10 @@ function AppContent() {
         onToggleZenMode={toggleZenMode}
         onApplyPreset={applyPreset}
         leftSidebarVisible={layout.leftSidebarVisible}
-        rightSidebarVisible={layout.rightSidebarVisible && hasAnyTabs && !hideExtraPanels}
-        bottomPanelVisible={layout.bottomPanelVisible && !hideExtraPanels}
-        showExtraPanelToggles={!hideExtraPanels}
+        rightSidebarVisible={layout.rightSidebarVisible && hasAnyTabs && !hideRightPanels}
+        bottomPanelVisible={layout.bottomPanelVisible && !hideBottomPanels}
+        showBottomPanelToggle={showBottomPanelToggle}
+        showRightPanelToggle={showRightPanelToggle}
         zenMode={layout.zenMode}
       />
 
@@ -1253,7 +1260,7 @@ function AppContent() {
           <ResizablePanel
             id="main-content"
             order={2}
-            defaultSize={100 - (layout.leftSidebarVisible ? layout.leftSidebarSize : 0) - ((layout.rightSidebarVisible && hasAnyTabs && !hideExtraPanels) ? layout.rightSidebarSize : 0)}
+            defaultSize={100 - (layout.leftSidebarVisible ? layout.leftSidebarSize : 0) - ((layout.rightSidebarVisible && hasAnyTabs && !hideRightPanels) ? layout.rightSidebarSize : 0)}
             minSize={30}
           >
             <div className="h-full flex flex-col">
@@ -1273,29 +1280,59 @@ function AppContent() {
                     </TerminalCallbacksProvider>
                   </ResizablePanel>
 
-                  {layout.bottomPanelVisible && !hideExtraPanels && activeConnection && (
+                  {layout.bottomPanelVisible && !hideBottomPanels && activeConnection && (
                     <>
                       <ResizableHandle />
 
-                      {/* File Browser Panel - uses activeConnection from context */}
                       <ResizablePanel
-                        id="file-browser"
+                        id="bottom-panel"
                         order={2}
                         defaultSize={layout.bottomPanelSize}
                         minSize={20}
                         maxSize={50}
                         onResize={(size) => setBottomPanelSize(size)}
                       >
-                        <ErrorBoundary label="File Browser">
-                          <IntegratedFileBrowser
-                          connectionId={activeConnection.connectionId}
-                          host={activeConnection.host}
-                          isConnected={activeConnection.status === 'connected'}
-                          onClose={() => {}}
-                          onOpenInLogMonitor={handleOpenInLogMonitor}
-                          onOpenInEditor={handleOpenInEditor}
-                        />
-                        </ErrorBoundary>
+                        <Tabs
+                          value={bottomPanelTab}
+                          onValueChange={(value) => setBottomPanelTab(value as 'file-browser' | 'compose')}
+                          className="h-full flex flex-col"
+                        >
+                          <TabsList className="inline-flex w-auto mx-1 mt-2">
+                            <TabsTrigger value="file-browser" className="text-xs px-2">
+                              {t('app.fileBrowser')}
+                            </TabsTrigger>
+                            <TabsTrigger value="compose" className="text-xs px-2">
+                              {t('app.composePane')}
+                            </TabsTrigger>
+                          </TabsList>
+
+                          <div className="flex-1 mt-0 overflow-hidden relative min-h-0">
+                            <TabsContent
+                              value="file-browser"
+                              className="absolute inset-0 mt-0 data-[state=inactive]:hidden"
+                            >
+                              <ErrorBoundary label={t('app.fileBrowser')}>
+                                <IntegratedFileBrowser
+                                  connectionId={activeConnection.connectionId}
+                                  host={activeConnection.host}
+                                  isConnected={activeConnection.status === 'connected'}
+                                  onClose={() => {}}
+                                  onOpenInLogMonitor={handleOpenInLogMonitor}
+                                  onOpenInEditor={handleOpenInEditor}
+                                />
+                              </ErrorBoundary>
+                            </TabsContent>
+
+                            <TabsContent
+                              value="compose"
+                              className="absolute inset-0 mt-0 data-[state=inactive]:hidden"
+                            >
+                              <ErrorBoundary label={t('app.composePane')}>
+                                <ComposePane />
+                              </ErrorBoundary>
+                            </TabsContent>
+                          </div>
+                        </Tabs>
                       </ResizablePanel>
                     </>
                   )}
@@ -1304,7 +1341,7 @@ function AppContent() {
             </div>
           </ResizablePanel>
 
-          {layout.rightSidebarVisible && hasAnyTabs && !hideExtraPanels && (
+          {layout.rightSidebarVisible && hasAnyTabs && !hideRightPanels && (
             <>
               <ResizableHandle />
 
@@ -1400,7 +1437,9 @@ export default function App() {
     <ErrorBoundary label="skd">
       <LayoutProvider>
         <TerminalGroupProvider>
-          <AppContent />
+          <TerminalInputProvider>
+            <AppContent />
+          </TerminalInputProvider>
         </TerminalGroupProvider>
       </LayoutProvider>
     </ErrorBoundary>

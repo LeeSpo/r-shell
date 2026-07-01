@@ -20,6 +20,7 @@ import { TerminalSearchBar } from './terminal/terminal-search-bar';
 import { toast } from 'sonner';
 import { signalReady } from '../lib/restoration-manager';
 import { useTerminalCallbacks } from '../lib/terminal-callbacks-context';
+import { useTerminalInput } from '../lib/terminal-input-context';
 import '@xterm/xterm/css/xterm.css';
 
 interface PtyTerminalProps {
@@ -60,6 +61,7 @@ export function PtyTerminal({
   onConnectionStatusChange
 }: PtyTerminalProps) {
   const { t } = useTranslation();
+  const { registerSender, unregisterSender } = useTerminalInput();
   const terminalRef = React.useRef<HTMLDivElement | null>(null);
   const xtermRef = React.useRef<XTerm | null>(null);
   const fitRef = React.useRef<FitAddon | null>(null);
@@ -410,6 +412,7 @@ export function PtyTerminal({
 
       ws.onopen = () => {
         console.log(`[PTY Terminal] [${connectionId}] WebSocket connected`);
+        registerSender(connectionId, sendInputToPty);
 
         // Start PTY session
         const startMsg = {
@@ -711,6 +714,7 @@ export function PtyTerminal({
     // Cleanup
     return () => {
       console.log(`[PTY Terminal] [${connectionId}] Cleaning up`);
+      unregisterSender(connectionId);
       isRunning = false;
 
       // Discard queued PTY output so stale writes never reach a disposed terminal.
@@ -765,7 +769,7 @@ export function PtyTerminal({
       term.reset(); // clear scrollback + viewport so GC can reclaim xterm buffers sooner
       term.dispose();
     };
-  }, [connectionId, connectionName, host, username, terminalKey, reconnectKey, sendInputToPty]);
+  }, [connectionId, connectionName, host, username, terminalKey, reconnectKey, sendInputToPty, registerSender, unregisterSender]);
   // NOTE: themeKey and appearanceKey are intentionally NOT in the deps above.
   // Including them would tear down the WebSocket + PTY session on every theme
   // change (e.g. macOS auto Dark/Light switch), killing any running remote

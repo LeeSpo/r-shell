@@ -34,6 +34,8 @@ interface MenuBarProps {
   rightSidebarVisible?: boolean;
   bottomPanelVisible?: boolean;
   showExtraPanelToggles?: boolean;
+  showBottomPanelToggle?: boolean;
+  showRightPanelToggle?: boolean;
   zenMode?: boolean;
 }
 
@@ -48,6 +50,8 @@ export function MenuBar({
   rightSidebarVisible,
   bottomPanelVisible,
   showExtraPanelToggles = true,
+  showBottomPanelToggle = showExtraPanelToggles,
+  showRightPanelToggle = showExtraPanelToggles,
   zenMode,
 }: MenuBarProps) {
   const { t } = useTranslation();
@@ -77,7 +81,7 @@ export function MenuBar({
             <TooltipContent>{t(leftSidebarVisible ? 'common.hide' : 'common.show')} {t('menuBar.toggleConnectionManager')}</TooltipContent>
           </Tooltip>
 
-          {showExtraPanelToggles && (
+          {showBottomPanelToggle && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggleBottomPanel}>
@@ -86,11 +90,11 @@ export function MenuBar({
                     : <PanelBottomOpen className="w-4 h-4" />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{t(bottomPanelVisible ? 'common.hide' : 'common.show')} {t('menuBar.toggleFileBrowser')}</TooltipContent>
+              <TooltipContent>{t(bottomPanelVisible ? 'common.hide' : 'common.show')} {t('menuBar.toggleBottomPanel')}</TooltipContent>
             </Tooltip>
           )}
 
-          {showExtraPanelToggles && (
+          {showRightPanelToggle && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggleRightSidebar}>

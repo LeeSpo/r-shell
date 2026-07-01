@@ -2,6 +2,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { PtyTerminal } from '../components/pty-terminal';
+import { TerminalInputProvider } from '../lib/terminal-input-context';
 
 const mocks = vi.hoisted(() => {
   const terminals: Array<any> = [];
@@ -166,13 +167,15 @@ vi.mock('sonner', () => ({
 
 function renderTerminal(isActive: boolean) {
   return render(
-    <PtyTerminal
-      connectionId="connection-1"
-      connectionName="SSH Server"
-      host="127.0.0.1"
-      username="root"
-      isActive={isActive}
-    />,
+    <TerminalInputProvider>
+      <PtyTerminal
+        connectionId="connection-1"
+        connectionName="SSH Server"
+        host="127.0.0.1"
+        username="root"
+        isActive={isActive}
+      />
+    </TerminalInputProvider>,
   );
 }
 
@@ -250,13 +253,15 @@ describe('PtyTerminal activation', () => {
     fitAddon.fit.mockClear();
 
     rerender(
-      <PtyTerminal
-        connectionId="connection-1"
-        connectionName="SSH Server"
-        host="127.0.0.1"
-        username="root"
-        isActive={true}
-      />,
+      <TerminalInputProvider>
+        <PtyTerminal
+          connectionId="connection-1"
+          connectionName="SSH Server"
+          host="127.0.0.1"
+          username="root"
+          isActive={true}
+        />
+      </TerminalInputProvider>,
     );
     await flushTimers();
 
@@ -278,13 +283,15 @@ describe('PtyTerminal activation', () => {
     const webSocketCount = mocks.webSockets.length;
 
     rerender(
-      <PtyTerminal
-        connectionId="connection-1"
-        connectionName="SSH Server"
-        host="127.0.0.1"
-        username="root"
-        isActive={true}
-      />,
+      <TerminalInputProvider>
+        <PtyTerminal
+          connectionId="connection-1"
+          connectionName="SSH Server"
+          host="127.0.0.1"
+          username="root"
+          isActive={true}
+        />
+      </TerminalInputProvider>,
     );
     await flushTimers();
 

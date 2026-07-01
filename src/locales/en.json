@@ -62,6 +62,8 @@
     "couldNotOpenWindow": "Could not open file window",
     "noCredentialsDesc": "No saved credentials found. Please connect manually.",
     "noEditorHandler": "Cannot open {{name}}: no editor handler available",
+    "fileBrowser": "File Browser",
+    "composePane": "Compose Pane",
     "monitor": "Monitor",
     "logs": "Logs",
     "systemMonitor": "System Monitor",
@@ -389,11 +391,30 @@
     "fullStackAllPanels": "Full Stack – All Panels",
     "zenMode": "Zen Mode",
     "toggleConnectionManager": "Toggle Connection Manager",
+    "toggleBottomPanel": "Toggle Bottom Panel",
     "toggleFileBrowser": "Toggle File Browser",
     "toggleMonitorPanel": "Toggle Monitor Panel",
     "toggleZenMode": "Toggle Zen Mode",
     "closeTab": "Close Tab",
     "window": "Window"
+  },
+  "composePane": {
+    "send": "Send",
+    "clear": "Clear",
+    "clearAfterSend": "Clear after send",
+    "placeholder": "Type commands or scripts here…",
+    "placeholderDisconnected": "Terminal not connected",
+    "hint": {
+      "sendShortcut": "Ctrl+Enter to send · Enter for new line"
+    },
+    "emptyState": {
+      "noTerminal": "Select a terminal tab to compose commands"
+    },
+    "toast": {
+      "sent": "Commands sent to terminal",
+      "sendFailed": "Failed to send commands to terminal",
+      "notConnected": "Terminal is not connected"
+    }
   },
   "toolbar": {
     "newConnection": "New Connection",
@@ -404,6 +425,7 @@
     "noRecentConnectionsDesc": "Connect to a server to see it here",
     "options": "Options",
     "toggleConnectionManager": "Toggle Connection Manager",
+    "toggleBottomPanel": "Toggle Bottom Panel",
     "toggleFileBrowser": "Toggle File Browser",
     "toggleMonitorPanel": "Toggle Monitor Panel",
     "toggleZenMode": "Toggle Zen Mode (Ctrl+K Z)",

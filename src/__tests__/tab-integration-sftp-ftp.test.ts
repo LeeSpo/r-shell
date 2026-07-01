@@ -258,13 +258,15 @@ describe('SFTP/FTP tab integration unit tests', () => {
       expect(!hideExtraPanels).toBe(true);
     });
 
-    it('extra panel toggle buttons hidden for local terminal tabs', () => {
+    it('bottom panel toggle remains available for local terminal tabs', () => {
       const activeTab = createTab({ protocol: 'Local', host: 'localhost' });
       const isFileBrowserTab = activeTab.tabType === 'file-browser';
       const isEditorTab = activeTab.tabType === 'editor';
       const isLocalTab = activeTab.protocol === 'Local';
-      const hideExtraPanels = isFileBrowserTab || isEditorTab || isLocalTab;
-      expect(!hideExtraPanels).toBe(false);
+      const hideBottomPanels = isFileBrowserTab || isEditorTab;
+      const hideRightPanels = isFileBrowserTab || isEditorTab || isLocalTab;
+      expect(!hideBottomPanels).toBe(true);
+      expect(!hideRightPanels).toBe(false);
     });
   });
 

@@ -296,7 +296,7 @@ export function Toolbar({
                 {bottomPanelVisible ? <PanelBottomClose className="w-4 h-4" /> : <PanelBottomOpen className="w-4 h-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{t(bottomPanelVisible ? 'common.hide' : 'common.show')} {t('toolbar.toggleFileBrowser')}</TooltipContent>
+            <TooltipContent>{t(bottomPanelVisible ? 'common.hide' : 'common.show')} {t('toolbar.toggleBottomPanel')}</TooltipContent>
           </Tooltip>
         )}
 
