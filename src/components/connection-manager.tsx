@@ -47,6 +47,7 @@ import {
 } from './ui/context-menu';
 import { toast } from 'sonner';
 import { StatusDot } from './ui/status-dot';
+import { PanelHeader, PanelToolbar } from './ui/panel-chrome';
 
 interface ConnectionNode {
   id: string;
@@ -563,11 +564,15 @@ export function ConnectionManager({
 
   return (
     <>
-    <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar">
+    <div className="flex h-full min-w-0 flex-col border-r border-sidebar-border bg-sidebar">
       {/* Connection Browser */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center gap-1 border-b border-sidebar-border px-3 py-1.5">
-          <h3 className="font-medium text-sm flex-1">{t('connectionManager.connectionsHeader')}</h3>
+      <div className="flex-1 min-h-0 min-w-0 flex flex-col">
+        <PanelHeader className="border-b border-sidebar-border px-2">
+          <h3 className="min-w-0 flex-1 truncate font-medium text-sm">
+            {t('connectionManager.connectionsHeader')}
+          </h3>
+        </PanelHeader>
+        <PanelToolbar className="border-b border-sidebar-border">
           <TooltipProvider>
             {/* Quick Connect */}
             <DropdownMenu>
@@ -659,8 +664,8 @@ export function ConnectionManager({
               </Tooltip>
             )}
           </TooltipProvider>
-        </div>
-        <div className="flex-1 overflow-auto">
+        </PanelToolbar>
+        <div className="flex-1 min-w-0 overflow-auto">
           {connections.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full p-4 text-center">
               <p className="text-sm text-muted-foreground mb-4">{t('connectionManager.noConnectionsYet')}</p>

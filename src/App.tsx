@@ -1236,7 +1236,7 @@ function AppContent() {
                 id="left-sidebar"
                 order={1}
                 defaultSize={layout.leftSidebarSize}
-                minSize={12}
+                minSize={16}
                 maxSize={30}
                 onResize={(size) => setLeftSidebarSize(size)}
               >

@@ -164,7 +164,7 @@ function ComposePaneEditor({ connectionId, isConnected }: ComposePaneEditorProps
           onKeyDown={handleKeyDown}
           disabled={!isConnected}
           placeholder={isConnected ? t('composePane.placeholder') : t('composePane.placeholderDisconnected')}
-          className="absolute inset-0 h-full w-full rounded-none border-0 resize-none font-mono text-[13px] leading-relaxed p-4 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+          className="absolute inset-0 h-full w-full rounded-none border-0 resize-none font-mono text-[13px] leading-relaxed p-4 bg-transparent focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-transparent placeholder:text-muted-foreground/50"
           spellCheck={false}
         />
       </div>

@@ -21,7 +21,7 @@ export interface LayoutPreset {
 
 const DEFAULT_LAYOUT: LayoutConfig = {
   leftSidebarVisible: true,
-  leftSidebarSize: 15,
+  leftSidebarSize: 18,
   rightSidebarVisible: true,
   rightSidebarSize: 20,
   bottomPanelVisible: true,
@@ -82,7 +82,7 @@ export class LayoutManager {
         description: 'Terminal only, all panels hidden',
         config: {
           leftSidebarVisible: false,
-          leftSidebarSize: 15,
+          leftSidebarSize: 18,
           rightSidebarVisible: false,
           rightSidebarSize: 20,
           bottomPanelVisible: false,
@@ -95,7 +95,7 @@ export class LayoutManager {
         description: 'Terminal with connection manager only',
         config: {
           leftSidebarVisible: true,
-          leftSidebarSize: 15,
+          leftSidebarSize: 18,
           rightSidebarVisible: false,
           rightSidebarSize: 20,
           bottomPanelVisible: false,
@@ -108,7 +108,7 @@ export class LayoutManager {
         description: 'All panels visible for maximum visibility',
         config: {
           leftSidebarVisible: true,
-          leftSidebarSize: 15,
+          leftSidebarSize: 18,
           rightSidebarVisible: true,
           rightSidebarSize: 20,
           bottomPanelVisible: true,
@@ -121,7 +121,7 @@ export class LayoutManager {
         description: 'Distraction-free terminal experience',
         config: {
           leftSidebarVisible: false,
-          leftSidebarSize: 15,
+          leftSidebarSize: 18,
           rightSidebarVisible: false,
           rightSidebarSize: 20,
           bottomPanelVisible: false,

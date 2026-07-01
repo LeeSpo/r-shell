@@ -106,88 +106,88 @@
 .dark {
   color-scheme: dark;
 
-  /* Base colors */
-  --background: #0f172a;
-  --foreground: #f1f5f9;
+  /* Base colors — VS Code Dark+ neutral charcoal */
+  --background: #1e1e1e;
+  --foreground: #cccccc;
   
   /* Card & Surface */
-  --card: #1e293b;
-  --card-foreground: #f1f5f9;
+  --card: #252526;
+  --card-foreground: #cccccc;
   
   /* Popover */
-  --popover: #1e293b;
-  --popover-foreground: #f1f5f9;
+  --popover: #252526;
+  --popover-foreground: #cccccc;
   
   /* Primary */
-  --primary: #3b82f6;
+  --primary: #3794ff;
   --primary-foreground: #ffffff;
-  --primary-hover: #60a5fa;
+  --primary-hover: #4da3ff;
   
   /* Secondary */
-  --secondary: #334155;
-  --secondary-foreground: #f1f5f9;
+  --secondary: #2d2d2d;
+  --secondary-foreground: #cccccc;
   
   /* Muted */
-  --muted: #334155;
-  --muted-foreground: #94a3b8;
+  --muted: #2d2d2d;
+  --muted-foreground: #858585;
   
   /* Accent */
-  --accent: #334155;
-  --accent-foreground: #f1f5f9;
+  --accent: #2d2d2d;
+  --accent-foreground: #cccccc;
   
   /* Destructive */
-  --destructive: #ef4444;
+  --destructive: #f85149;
   --destructive-foreground: #ffffff;
   
   /* Success */
-  --success: #22c55e;
+  --success: #3fb950;
   --success-foreground: #ffffff;
   
   /* Warning */
-  --warning: #f59e0b;
+  --warning: #d29922;
   --warning-foreground: #ffffff;
   
   /* Border & Input */
-  --border: #334155;
-  --input: #1e293b;
-  --input-background: #1e293b;
-  --ring: #3b82f6;
+  --border: #3e3e42;
+  --input: #252526;
+  --input-background: #252526;
+  --ring: #3794ff;
   
   /* Switch */
-  --switch-background: #475569;
+  --switch-background: #3e3e42;
 
   /* Chart colors */
-  --chart-1: #3b82f6;
-  --chart-2: #22c55e;
-  --chart-3: #f59e0b;
-  --chart-4: #ef4444;
-  --chart-5: #a78bfa;
+  --chart-1: #3794ff;
+  --chart-2: #3fb950;
+  --chart-3: #d29922;
+  --chart-4: #f85149;
+  --chart-5: #a371f7;
 
   /* Sidebar */
-  --sidebar: #0f172a;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #3b82f6;
+  --sidebar: #252526;
+  --sidebar-foreground: #cccccc;
+  --sidebar-primary: #3794ff;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: #334155;
-  --sidebar-ring: #3b82f6;
+  --sidebar-accent: #2a2d2e;
+  --sidebar-accent-foreground: #cccccc;
+  --sidebar-border: #3e3e42;
+  --sidebar-ring: #3794ff;
 
   /* Terminal */
-  --terminal-bg: #0d1117;
-  --terminal-fg: #c9d1d9;
-  --terminal-cursor: #58a6ff;
-  --terminal-selection: rgba(88, 166, 255, 0.3);
+  --terminal-bg: #1e1e1e;
+  --terminal-fg: #cccccc;
+  --terminal-cursor: #aeafad;
+  --terminal-selection: rgba(55, 148, 255, 0.3);
 
   /* Status colors */
-  --status-connected: #22c55e;
-  --status-connecting: #f59e0b;
-  --status-disconnected: #ef4444;
-  --status-pending: #60a5fa;
+  --status-connected: #3fb950;
+  --status-connecting: #d29922;
+  --status-disconnected: #f85149;
+  --status-pending: #3794ff;
 
   /* Panel chrome */
-  --panel-header-bg: color-mix(in srgb, var(--muted) 50%, transparent);
-  --panel-toolbar-bg: color-mix(in srgb, var(--muted) 30%, transparent);
+  --panel-header-bg: color-mix(in srgb, var(--muted) 35%, transparent);
+  --panel-toolbar-bg: color-mix(in srgb, var(--muted) 20%, transparent);
   --panel-border: color-mix(in srgb, var(--border) 50%, transparent);
 }
 

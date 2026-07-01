@@ -9,7 +9,7 @@ export type StatusDotVariant =
 
 const variantClasses: Record<StatusDotVariant, string> = {
   connected: "bg-status-connected",
-  connecting: "bg-status-connecting",
+  connecting: "bg-status-connecting animate-pulse",
   disconnected: "bg-status-disconnected",
   pending: "bg-status-pending animate-pulse",
 };

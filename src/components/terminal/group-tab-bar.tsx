@@ -6,6 +6,7 @@ import { getTabDisplayName } from '../../lib/terminal-group-utils';
 import { useTerminalGroups } from '../../lib/terminal-group-context';
 import { useTerminalCallbacks } from '../../lib/terminal-callbacks-context';
 import { Button } from '../ui/button';
+import { StatusDot } from '../ui/status-dot';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -291,20 +292,20 @@ export function GroupTabBar({
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {tab.tabType === 'file-browser' ? (
-                        <FolderSync className="h-3.5 w-3.5 shrink-0 text-yellow-500" />
+                        <FolderSync className="h-3.5 w-3.5 shrink-0 text-warning" />
                       ) : tab.tabType === 'editor' ? (
-                        <FileCode className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                        <FileCode className="h-3.5 w-3.5 shrink-0 text-success" />
                       ) : (
                         <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
-                      <div
-                        className={`w-2 h-2 rounded-full shrink-0 ${
+                      <StatusDot
+                        variant={
                           tab.connectionStatus === 'connected'
-                            ? 'bg-green-500'
+                            ? 'connected'
                             : tab.connectionStatus === 'connecting'
-                              ? 'bg-yellow-500 animate-pulse'
-                              : 'bg-red-500'
-                        }`}
+                              ? 'connecting'
+                              : 'disconnected'
+                        }
                       />
                       <span className="text-sm truncate">{getTabDisplayName(tab, tabs)}</span>
                     </div>
