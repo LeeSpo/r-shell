@@ -10,6 +10,7 @@ import { StatusBar } from './components/status-bar';
 import { ConnectionDialog, ConnectionConfig } from './components/connection-dialog';
 import { SettingsModal } from './components/settings-modal';
 import { IntegratedFileBrowser } from './components/integrated-file-browser';
+import { LocalFileBrowser } from './components/local-file-browser';
 import { ComposePane } from './components/compose-pane';
 import { TerminalInputProvider } from './lib/terminal-input-context';
 import { WelcomeScreen } from './components/welcome-screen';
@@ -1299,7 +1300,7 @@ function AppContent() {
                         >
                           <TabsList className="inline-flex w-auto mx-1 mt-2">
                             <TabsTrigger value="file-browser" className="text-xs px-2">
-                              {t('app.fileBrowser')}
+                              {isLocalTab ? t('app.localFiles') : t('app.fileBrowser')}
                             </TabsTrigger>
                             <TabsTrigger value="compose" className="text-xs px-2">
                               {t('app.composePane')}
@@ -1311,15 +1312,21 @@ function AppContent() {
                               value="file-browser"
                               className="absolute inset-0 mt-0 data-[state=inactive]:hidden"
                             >
-                              <ErrorBoundary label={t('app.fileBrowser')}>
-                                <IntegratedFileBrowser
-                                  connectionId={activeConnection.connectionId}
-                                  host={activeConnection.host}
-                                  isConnected={activeConnection.status === 'connected'}
-                                  onClose={() => {}}
-                                  onOpenInLogMonitor={handleOpenInLogMonitor}
-                                  onOpenInEditor={handleOpenInEditor}
-                                />
+                              <ErrorBoundary
+                                label={isLocalTab ? t('app.localFiles') : t('app.fileBrowser')}
+                              >
+                                {isLocalTab ? (
+                                  <LocalFileBrowser />
+                                ) : (
+                                  <IntegratedFileBrowser
+                                    connectionId={activeConnection.connectionId}
+                                    host={activeConnection.host}
+                                    isConnected={activeConnection.status === 'connected'}
+                                    onClose={() => {}}
+                                    onOpenInLogMonitor={handleOpenInLogMonitor}
+                                    onOpenInEditor={handleOpenInEditor}
+                                  />
+                                )}
                               </ErrorBoundary>
                             </TabsContent>
 

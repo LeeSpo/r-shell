@@ -63,6 +63,7 @@
     "noCredentialsDesc": "No saved credentials found. Please connect manually.",
     "noEditorHandler": "Cannot open {{name}}: no editor handler available",
     "fileBrowser": "File Browser",
+    "localFiles": "Local Files",
     "composePane": "Compose Pane",
     "monitor": "Monitor",
     "logs": "Logs",
